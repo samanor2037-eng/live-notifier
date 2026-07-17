@@ -75,6 +75,8 @@ function App() {
   // Track previous live states to trigger notifications on transition
   const prevLiveStatesRef = useRef({});
 
+  const [session, setSession] = useState(null);
+
   // Initialize Supabase Client dynamically from backend config
   useEffect(() => {
     const loadConfig = async () => {
@@ -98,23 +100,44 @@ function App() {
     loadConfig();
   }, []);
 
-  // Load channels and SMTP settings
+  // Monitor session and Google Sign-in state
   useEffect(() => {
     if (!supabase) return;
+    
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    // Listen to changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase]);
+
+  // Load channels and SMTP settings when session is active
+  useEffect(() => {
+    if (!supabase || !session) return;
     
     fetchChannels();
     fetchSettings();
     
-    // Subscribe to Realtime database updates
+    // Subscribe to Realtime database updates for this user's channels
     const channelSubscription = supabase
       .channel('schema-db-changes')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'channels' },
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'channels',
+          filter: `user_id=eq.${session.user.id}`
+        },
         (payload) => {
           console.log('Realtime DB Change:', payload);
           if (payload.eventType === 'UPDATE') {
-            // Trigger local alerts if channel goes live
             const updatedChannel = payload.new;
             const wasLive = prevLiveStatesRef.current[updatedChannel.id];
             
@@ -141,7 +164,7 @@ function App() {
     return () => {
       supabase.removeChannel(channelSubscription);
     };
-  }, [supabase, soundEnabled]);
+  }, [supabase, session, soundEnabled]);
 
   // Request browser notification permissions
   useEffect(() => {
@@ -157,7 +180,12 @@ function App() {
 
   const fetchChannels = async () => {
     try {
-      const { data, error } = await supabase.from('channels').select('*').order('created_at', { ascending: false });
+      if (!session) return;
+      const { data, error } = await supabase
+        .from('channels')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false });
       if (error) throw error;
       setChannels(data || []);
       
@@ -203,11 +231,23 @@ function App() {
     }
   };
 
-  const handleSaveSupabase = (e) => {
-    e.preventDefault();
-    localStorage.setItem('SB_URL', supabaseConfig.url);
-    localStorage.setItem('SB_KEY', supabaseConfig.key);
-    showToast('Xogta Supabase waa la kaydiyay!');
+  const handleGoogleLogin = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
+    } catch (err) {
+      showToast(`Login failed: ${err.message}`, 'error');
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    showToast('Waa laguu saaray akoonka (Logged Out).');
   };
 
   const handleAddChannel = async (e) => {
@@ -224,7 +264,8 @@ function App() {
           platform: newChannel.platform,
           identifier: newChannel.identifier.trim(),
           name: newChannel.name.trim(),
-          is_live: false
+          is_live: false,
+          user_id: session.user.id
         }
       ]);
       
@@ -257,13 +298,16 @@ function App() {
     try {
       const { error } = await supabase.from('settings').upsert({
         key: 'smtp_config',
-        value: smtp
+        value: {
+          ...smtp,
+          to_email: session?.user?.email
+        }
       });
       
       if (error) throw error;
-      showToast('SMTP settings waa la kaydiyay!');
+      showToast('Settings-ka waa la kaydiyay!');
     } catch (err) {
-      showToast('Fashil: Kaydinta SMTP', 'error');
+      showToast('Fashil: Kaydinta settings-ka', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -290,7 +334,12 @@ function App() {
       const res = await fetch('http://localhost:5001/api/send-test-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ smtp_config: smtp })
+        body: JSON.stringify({ 
+          smtp_config: {
+            ...smtp,
+            to_email: session?.user?.email
+          } 
+        })
       });
       const data = await res.json();
       if (data.success) {
@@ -304,6 +353,34 @@ function App() {
       setIsLoading(false);
     }
   };
+
+  if (!session) {
+    return (
+      <div className="app-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '20px' }}>
+        {/* Toast Notification */}
+        {toast && (
+          <div className={`toast ${toast.type === 'error' ? 'border-red-500' : 'border-blue-500'}`}>
+            {toast.type === 'error' ? <AlertCircle color="#ff3b30" /> : <CheckCircle2 color="#007aff" />}
+            <span>{toast.message}</span>
+          </div>
+        )}
+        
+        <div className="glass-card text-center" style={{ maxWidth: '420px', width: '100%', padding: '40px 30px' }}>
+          <Radio className="mx-auto mb-6 animate-pulse" color="#ff3b30" size={64} style={{ margin: '0 auto 20px auto' }} />
+          <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '10px' }}>Social Live Notifier</h1>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '30px', fontSize: '0.95rem', lineHeight: '1.5' }}>
+            La soco marka dadka aad rabto ay Live galaan ama muuqaal cusub soo dhigaan. Geli akoonkaaga Google si aad u bilowdo.
+          </p>
+          <button className="btn btn-primary w-full flex items-center justify-center gap-3 py-3" onClick={handleGoogleLogin} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '14px', borderRadius: '8px', fontSize: '1rem' }}>
+            <svg className="w-5 h-5" viewBox="0 0 24 24" width="20" height="20">
+              <path fill="currentColor" d="M12.24 10.285V14.4h6.887C18.2 16.614 15.645 18 12.24 18c-3.86 0-7-3.14-7-7s3.14-7 7-7c1.706 0 3.257.618 4.47 1.637l3.202-3.202C17.996 1.054 15.26 0 12.24 0 5.58 0 0 5.58 0 12.24s5.58 12.24 12.24 12.24c6.76 0 11.76-4.76 11.76-11.76 0-.796-.08-1.571-.22-2.315h-11.54z"/>
+            </svg>
+            Geli Akoonka Google (Sign In)
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-container">
@@ -320,6 +397,13 @@ function App() {
         <div className="header-title-section">
           <h1><Radio className="animate-pulse" color="#ff3b30" size={32} /> Social Live Notifier</h1>
           <p>La soco marka qof aad rabto uu Live galo ama muuqaal cusub soo dhigo YouTube & TikTok</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            <span>Wuxuu u furan yahay: <strong>{session.user.email}</strong></span>
+            <span>•</span>
+            <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#ff3b30', cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}>
+              Ka Bax (Log Out)
+            </button>
+          </div>
         </div>
         
         <div className="flex gap-4">
@@ -634,14 +718,17 @@ function App() {
               )}
               
               <div className="form-group">
-                <label>Geli Email-kaaga (Laguugu soo dirayo ogeysiiska)</label>
+                <label>Email-kaaga (Laguugu soo dirayo ogeysiiska)</label>
                 <input 
                   type="email" 
                   className="input-field"
-                  placeholder="emailkaaga@gmail.com"
-                  value={smtp.to_email || ''}
-                  onChange={(e) => setSmtp({...smtp, to_email: e.target.value})}
+                  value={session?.user?.email || ''}
+                  disabled
+                  style={{ opacity: 0.6, cursor: 'not-allowed', backgroundColor: 'rgba(255,255,255,0.05)' }}
                 />
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '-10px', marginBottom: '15px' }}>
+                  * Ogeysiisyada waxaa loo diri doonaa emailkaaga Google ee kor ku qoran.
+                </p>
               </div>
               
               <div className="flex gap-4">
