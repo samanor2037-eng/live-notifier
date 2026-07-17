@@ -297,8 +297,26 @@ async function checkAllChannels() {
 
       // Trigger email notifications
       if (liveStatusChanged || newVideoUploaded) {
-        if (smtpConfig) {
-          await sendEmailNotification(smtpConfig, channel, checkResult.isLive, checkResult.latestVideoUrl, newVideoUploaded);
+        let targetEmail = null;
+        if (channel.user_id) {
+          try {
+            const { data: userData } = await supabase.auth.admin.getUserById(channel.user_id);
+            if (userData && userData.user) {
+              targetEmail = userData.user.email;
+            }
+          } catch (err) {
+            console.error(`Failed to get email for user ${channel.user_id}:`, err.message);
+          }
+        }
+
+        // Fallback to settings to_email
+        if (!targetEmail && smtpConfig) {
+          targetEmail = smtpConfig.to_email;
+        }
+
+        if (targetEmail) {
+          const configWithReceiver = { ...smtpConfig, to_email: targetEmail };
+          await sendEmailNotification(configWithReceiver, channel, checkResult.isLive, checkResult.latestVideoUrl, newVideoUploaded);
         }
       }
 
