@@ -24,20 +24,10 @@ const supabase = (supabaseUrl && supabaseKey && !supabaseUrl.includes("your-supa
 
 // Helper to send email notifications
 async function sendEmailNotification(smtp, channel, isLive, videoUrl, isNewVideo) {
-  if (!smtp || !smtp.host || !smtp.user || !smtp.pass || !smtp.to_email) {
-    console.log("SMTP is not fully configured. Skipping email notification.");
+  if (!smtp || !smtp.to_email) {
+    console.log("Email configurations are missing. Skipping email notification.");
     return;
   }
-
-  const transporter = nodemailer.createTransport({
-    host: smtp.host,
-    port: parseInt(smtp.port) || 587,
-    secure: parseInt(smtp.port) === 465,
-    auth: {
-      user: smtp.user,
-      pass: smtp.pass
-    }
-  });
 
   let subject = "";
   let html = "";
@@ -71,16 +61,48 @@ async function sendEmailNotification(smtp, channel, isLive, videoUrl, isNewVideo
     `;
   }
 
-  try {
-    await transporter.sendMail({
-      from: `"Social Alert Engine" <${smtp.user}>`,
-      to: smtp.to_email,
-      subject: subject,
-      html: html
-    });
-    console.log(`Email successfully sent to ${smtp.to_email}`);
-  } catch (err) {
-    console.error("Nodemailer Error: Failed to send email alert:", err.message);
+  // Handle Bird API provider
+  if (smtp.provider === 'bird' || smtp.bird_api_key) {
+    try {
+      const { BirdClient } = require('@messagebird/sdk');
+      const bird = new BirdClient({ apiKey: smtp.bird_api_key });
+      await bird.email.send({
+        from: smtp.bird_from || "onboarding@messagebird.dev",
+        to: [smtp.to_email],
+        subject: subject,
+        html: html
+      });
+      console.log(`Email successfully sent via Bird to ${smtp.to_email}`);
+    } catch (err) {
+      console.error("Bird API Error: Failed to send email alert:", err.message);
+    }
+  } else {
+    // Nodemailer SMTP fallback
+    if (!smtp.host || !smtp.user || !smtp.pass) {
+      console.log("SMTP not fully configured. Skipping SMTP email.");
+      return;
+    }
+    try {
+      const transporter = nodemailer.createTransport({
+        host: smtp.host,
+        port: parseInt(smtp.port) || 587,
+        secure: parseInt(smtp.port) === 465,
+        auth: {
+          user: smtp.user,
+          pass: smtp.pass
+        }
+      });
+
+      await transporter.sendMail({
+        from: `"Social Alert Engine" <${smtp.user}>`,
+        to: smtp.to_email,
+        subject: subject,
+        html: html
+      });
+      console.log(`Email successfully sent via SMTP to ${smtp.to_email}`);
+    } catch (err) {
+      console.error("Nodemailer Error: Failed to send email alert:", err.message);
+    }
   }
 }
 
@@ -260,36 +282,57 @@ app.post('/api/check', async (req, res) => {
 
 app.post('/api/send-test-email', async (req, res) => {
   const { smtp_config } = req.body;
-  if (!smtp_config || !smtp_config.host || !smtp_config.user || !smtp_config.pass || !smtp_config.to_email) {
-    return res.status(400).json({ error: "Missing required SMTP configurations" });
+  if (!smtp_config || !smtp_config.to_email) {
+    return res.status(400).json({ error: "Missing required configurations (to_email)" });
   }
-  
-  try {
-    const transporter = nodemailer.createTransport({
-      host: smtp_config.host,
-      port: parseInt(smtp_config.port) || 587,
-      secure: parseInt(smtp_config.port) === 465,
-      auth: {
-        user: smtp_config.user,
-        pass: smtp_config.pass
-      }
-    });
 
-    await transporter.sendMail({
-      from: `"Social Alert Engine" <${smtp_config.user}>`,
-      to: smtp_config.to_email,
-      subject: "Test Email: Social Live Notifier",
-      text: "Congratulations! Your SMTP settings are correctly configured and working.",
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #007aff; border-radius: 8px;">
-          <h2 style="color: #007aff;">SMTP Connection Verified!</h2>
-          <p>This is a test email confirming that your email notification system is working perfectly.</p>
-        </div>
-      `
-    });
-    res.json({ success: true, message: "Test email sent successfully!" });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+  const subject = "Test Email: Social Live Notifier";
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #007aff; border-radius: 8px;">
+      <h2 style="color: #007aff;">Email Connection Verified!</h2>
+      <p>This is a test email confirming that your email notification system is working perfectly.</p>
+    </div>
+  `;
+
+  if (smtp_config.provider === 'bird' || smtp_config.bird_api_key) {
+    try {
+      const { BirdClient } = require('@messagebird/sdk');
+      const bird = new BirdClient({ apiKey: smtp_config.bird_api_key });
+      await bird.email.send({
+        from: smtp_config.bird_from || "onboarding@messagebird.dev",
+        to: [smtp_config.to_email],
+        subject: subject,
+        html: html
+      });
+      res.json({ success: true, message: "Test email sent successfully via Bird!" });
+    } catch (err) {
+      res.status(500).json({ success: false, error: `Bird API Error: ${err.message}` });
+    }
+  } else {
+    if (!smtp_config.host || !smtp_config.user || !smtp_config.pass) {
+      return res.status(400).json({ error: "Missing required SMTP configurations" });
+    }
+    try {
+      const transporter = nodemailer.createTransport({
+        host: smtp_config.host,
+        port: parseInt(smtp_config.port) || 587,
+        secure: parseInt(smtp_config.port) === 465,
+        auth: {
+          user: smtp_config.user,
+          pass: smtp_config.pass
+        }
+      });
+
+      await transporter.sendMail({
+        from: `"Social Alert Engine" <${smtp_config.user}>`,
+        to: smtp_config.to_email,
+        subject: subject,
+        html: html
+      });
+      res.json({ success: true, message: "Test email sent successfully via SMTP!" });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
   }
 });
 

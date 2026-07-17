@@ -53,10 +53,13 @@ function App() {
   const [supabase, setSupabase] = useState(null);
   const [channels, setChannels] = useState([]);
   const [smtp, setSmtp] = useState({
+    provider: 'smtp',
     host: '',
     port: '587',
     user: '',
     pass: '',
+    bird_api_key: '',
+    bird_from: 'onboarding@messagebird.dev',
     to_email: ''
   });
   
@@ -490,54 +493,94 @@ function App() {
           {/* SMTP & Testing */}
           <div className="glass-card">
             <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-              <Mail color="#007aff" /> E-Mail SMTP Settings
+              <Mail color="#007aff" /> E-Mail Notification Settings
             </h2>
             
             <form onSubmit={handleSaveSMTP}>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="form-group">
-                  <label>SMTP Host</label>
-                  <input 
-                    type="text" 
-                    className="input-field"
-                    placeholder="smtp.gmail.com"
-                    value={smtp.host}
-                    onChange={(e) => setSmtp({...smtp, host: e.target.value})}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>SMTP Port</label>
-                  <input 
-                    type="text" 
-                    className="input-field"
-                    placeholder="587"
-                    value={smtp.port}
-                    onChange={(e) => setSmtp({...smtp, port: e.target.value})}
-                  />
-                </div>
-              </div>
-              
               <div className="form-group">
-                <label>SMTP User (Email-ka wax laga dirayo)</label>
-                <input 
-                  type="email" 
-                  className="input-field"
-                  placeholder="tusaale@gmail.com"
-                  value={smtp.user}
-                  onChange={(e) => setSmtp({...smtp, user: e.target.value})}
-                />
+                <label>Habka loo dirayo E-Mail-ka (Email Provider)</label>
+                <select 
+                  className="select-field"
+                  value={smtp.provider || 'smtp'}
+                  onChange={(e) => setSmtp({...smtp, provider: e.target.value})}
+                >
+                  <option value="smtp">SMTP (Gmail, Outlook, etc.)</option>
+                  <option value="bird">Bird API (Messagebird)</option>
+                </select>
               </div>
-              
-              <div className="form-group">
-                <label>SMTP App Password (Gmail App Password)</label>
-                <input 
-                  type="password" 
-                  className="input-field"
-                  placeholder="••••••••••••••••"
-                  value={smtp.pass}
-                  onChange={(e) => setSmtp({...smtp, pass: e.target.value})}
-                />
-              </div>
+
+              {(!smtp.provider || smtp.provider === 'smtp') ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="form-group">
+                      <label>SMTP Host</label>
+                      <input 
+                        type="text" 
+                        className="input-field"
+                        placeholder="smtp.gmail.com"
+                        value={smtp.host || ''}
+                        onChange={(e) => setSmtp({...smtp, host: e.target.value})}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>SMTP Port</label>
+                      <input 
+                        type="text" 
+                        className="input-field"
+                        placeholder="587"
+                        value={smtp.port || ''}
+                        onChange={(e) => setSmtp({...smtp, port: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>SMTP User (Email-ka wax laga dirayo)</label>
+                    <input 
+                      type="email" 
+                      className="input-field"
+                      placeholder="tusaale@gmail.com"
+                      value={smtp.user || ''}
+                      onChange={(e) => setSmtp({...smtp, user: e.target.value})}
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>SMTP App Password</label>
+                    <input 
+                      type="password" 
+                      className="input-field"
+                      placeholder="••••••••••••••••"
+                      value={smtp.pass || ''}
+                      onChange={(e) => setSmtp({...smtp, pass: e.target.value})}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="form-group">
+                    <label>Bird API Key</label>
+                    <input 
+                      type="password" 
+                      className="input-field"
+                      placeholder="bk_eu1_..."
+                      value={smtp.bird_api_key || ''}
+                      onChange={(e) => setSmtp({...smtp, bird_api_key: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Bird From Email (Email-ka wax laga dirayo)</label>
+                    <input 
+                      type="text" 
+                      className="input-field"
+                      placeholder="onboarding@messagebird.dev"
+                      value={smtp.bird_from || ''}
+                      onChange={(e) => setSmtp({...smtp, bird_from: e.target.value})}
+                    />
+                  </div>
+                </>
+              )}
               
               <div className="form-group">
                 <label>Geli Email-kaaga (Laguugu soo dirayo ogeysiiska)</label>
@@ -545,14 +588,14 @@ function App() {
                   type="email" 
                   className="input-field"
                   placeholder="emailkaaga@gmail.com"
-                  value={smtp.to_email}
+                  value={smtp.to_email || ''}
                   onChange={(e) => setSmtp({...smtp, to_email: e.target.value})}
                 />
               </div>
               
               <div className="flex gap-4">
                 <button type="submit" className="btn btn-primary flex-1" disabled={isLoading || !isConfigured}>
-                  Kaydi SMTP
+                  Kaydi Settings-ka
                 </button>
                 <button type="button" className="btn-action flex-1 justify-center" onClick={sendTestEmail} disabled={isLoading || !isConfigured}>
                   Tijaabi Email-ka
