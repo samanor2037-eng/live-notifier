@@ -1,3 +1,34 @@
+// DNS Resolution Override to resolve api.bird.com on systems with restricted DNS
+const dns = require('dns');
+const originalLookup = dns.lookup;
+const dnsResolver = new dns.Resolver();
+dnsResolver.setServers(['8.8.8.8', '1.1.1.1']);
+
+dns.lookup = function(hostname, options, callback) {
+  if (typeof options === 'function') {
+    callback = options;
+    options = {};
+  }
+  const isAll = options && options.all;
+
+  // Only override for bird.com to prevent breaking local/internal resolutions
+  if (hostname.includes('bird.com') || hostname.includes('messagebird.com')) {
+    dnsResolver.resolve4(hostname, (err, addresses) => {
+      if (err || !addresses || addresses.length === 0) {
+        return originalLookup(hostname, options, callback);
+      }
+      if (isAll) {
+        const result = addresses.map(ip => ({ address: ip, family: 4 }));
+        callback(null, result);
+      } else {
+        callback(null, addresses[0], 4);
+      }
+    });
+  } else {
+    return originalLookup(hostname, options, callback);
+  }
+};
+
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
@@ -12,15 +43,23 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 5001;
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
 
-if (!supabaseUrl || !supabaseKey || supabaseUrl.includes("your-supabase") || supabaseKey.includes("your-supabase")) {
-  console.warn("WARNING: Supabase URL or Key is not configured yet. Set them in backend/.env file.");
+if (!supabaseUrl || !supabaseServiceKey || supabaseUrl.includes("your-supabase")) {
+  console.warn("WARNING: Supabase URL or Service Key is not configured yet. Set them in backend/.env file.");
 }
 
-const supabase = (supabaseUrl && supabaseKey && !supabaseUrl.includes("your-supabase")) 
-  ? createClient(supabaseUrl, supabaseKey) 
+const supabase = (supabaseUrl && supabaseServiceKey && !supabaseUrl.includes("your-supabase")) 
+  ? createClient(supabaseUrl, supabaseServiceKey) 
   : null;
+
+// Route to serve Supabase configuration to frontend
+app.get('/api/config', (req, res) => {
+  res.json({
+    supabaseUrl: process.env.SUPABASE_URL || "",
+    supabaseKey: process.env.SUPABASE_ANON_KEY || ""
+  });
+});
 
 // Helper to send email notifications
 async function sendEmailNotification(smtp, channel, isLive, videoUrl, isNewVideo) {
@@ -61,8 +100,28 @@ async function sendEmailNotification(smtp, channel, isLive, videoUrl, isNewVideo
     `;
   }
 
-  // Handle Bird API provider
-  if (smtp.provider === 'bird' || smtp.bird_api_key) {
+  // Handle Google Apps Script provider
+  if (smtp.provider === 'gas' && smtp.gas_url) {
+    try {
+      const response = await fetch(smtp.gas_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: smtp.to_email,
+          subject: subject,
+          html: html
+        })
+      });
+      const resData = await response.json();
+      if (resData.success) {
+        console.log(`Email successfully sent via Google Apps Script to ${smtp.to_email}`);
+      } else {
+        console.error("Google Apps Script API Error:", resData.error);
+      }
+    } catch (err) {
+      console.error("Google Apps Script Connection Error: Failed to send email alert:", err.message);
+    }
+  } else if (smtp.provider === 'bird' || smtp.bird_api_key) {
     try {
       const { BirdClient } = require('@messagebird/sdk');
       const bird = new BirdClient({ apiKey: smtp.bird_api_key });
@@ -294,7 +353,27 @@ app.post('/api/send-test-email', async (req, res) => {
     </div>
   `;
 
-  if (smtp_config.provider === 'bird' || smtp_config.bird_api_key) {
+  if (smtp_config.provider === 'gas' && smtp_config.gas_url) {
+    try {
+      const response = await fetch(smtp_config.gas_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: smtp_config.to_email,
+          subject: subject,
+          html: html
+        })
+      });
+      const resData = await response.json();
+      if (resData.success) {
+        res.json({ success: true, message: "Test email sent successfully via Google Apps Script!" });
+      } else {
+        res.status(500).json({ success: false, error: `Google Apps Script Error: ${resData.error}` });
+      }
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  } else if (smtp_config.provider === 'bird' || smtp_config.bird_api_key) {
     try {
       const { BirdClient } = require('@messagebird/sdk');
       const bird = new BirdClient({ apiKey: smtp_config.bird_api_key });

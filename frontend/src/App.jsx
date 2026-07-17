@@ -45,11 +45,6 @@ function playChime() {
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [supabaseConfig, setSupabaseConfig] = useState({
-    url: localStorage.getItem('SB_URL') || import.meta.env.VITE_SUPABASE_URL || '',
-    key: localStorage.getItem('SB_KEY') || import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-  });
-  
   const [supabase, setSupabase] = useState(null);
   const [channels, setChannels] = useState([]);
   const [smtp, setSmtp] = useState({
@@ -60,6 +55,7 @@ function App() {
     pass: '',
     bird_api_key: '',
     bird_from: 'onboarding@messagebird.dev',
+    gas_url: '',
     to_email: ''
   });
   
@@ -79,17 +75,28 @@ function App() {
   // Track previous live states to trigger notifications on transition
   const prevLiveStatesRef = useRef({});
 
-  // Initialize Supabase Client
+  // Initialize Supabase Client dynamically from backend config
   useEffect(() => {
-    if (supabaseConfig.url && supabaseConfig.key && !supabaseConfig.url.includes('your-supabase')) {
-      const client = createClient(supabaseConfig.url, supabaseConfig.key);
-      setSupabase(client);
-      setIsConfigured(true);
-    } else {
-      setSupabase(null);
-      setIsConfigured(false);
-    }
-  }, [supabaseConfig]);
+    const loadConfig = async () => {
+      try {
+        const res = await fetch('http://localhost:5001/api/config');
+        const data = await res.json();
+        if (data.supabaseUrl && data.supabaseKey && !data.supabaseUrl.includes('your-supabase')) {
+          const client = createClient(data.supabaseUrl, data.supabaseKey);
+          setSupabase(client);
+          setIsConfigured(true);
+        } else {
+          setSupabase(null);
+          setIsConfigured(false);
+        }
+      } catch (err) {
+        console.error("Failed to fetch Supabase config from backend:", err);
+        setSupabase(null);
+        setIsConfigured(false);
+      }
+    };
+    loadConfig();
+  }, []);
 
   // Load channels and SMTP settings
   useEffect(() => {
@@ -489,8 +496,8 @@ function App() {
       )}
 
       {activeTab === 'settings' && (
-        <div className="settings-grid">
-          {/* SMTP & Testing */}
+        <div className="max-w-2xl mx-auto">
+          {/* E-Mail Settings */}
           <div className="glass-card">
             <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
               <Mail color="#007aff" /> E-Mail Notification Settings
@@ -506,10 +513,54 @@ function App() {
                 >
                   <option value="smtp">SMTP (Gmail, Outlook, etc.)</option>
                   <option value="bird">Bird API (Messagebird)</option>
+                  <option value="gas">Google Apps Script (Bilaash & Fudud)</option>
                 </select>
               </div>
 
-              {(!smtp.provider || smtp.provider === 'smtp') ? (
+              {smtp.provider === 'gas' ? (
+                <>
+                  <div className="form-group">
+                    <label>Google Apps Script Web App URL</label>
+                    <input 
+                      type="text" 
+                      className="input-field"
+                      placeholder="https://script.google.com/macros/s/.../exec"
+                      value={smtp.gas_url || ''}
+                      onChange={(e) => setSmtp({...smtp, gas_url: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="mt-4 p-4 rounded-lg bg-white/5 border border-white/5 text-xs text-gray-400" style={{ fontSize: '0.85rem', lineHeight: '1.4rem', marginBottom: '20px' }}>
+                    <p className="font-semibold text-white mb-2">Sida loo diyaariyo Google Apps Script:</p>
+                    <ol className="list-decimal list-inside space-y-2">
+                      <li>Aad <a href="https://script.google.com" target="_blank" rel="noreferrer" style={{color: '#007aff', textDecoration: 'underline'}}>script.google.com</a> oo ku abuur akoon/mashruuc cusub.</li>
+                      <li>Ku shub (paste) koodhkan hoose:
+                        <pre style={{background: '#000', padding: '12px', borderRadius: '6px', marginTop: '6px', overflowX: 'auto', color: '#34c759', fontFamily: 'monospace'}}>
+{`function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    MailApp.sendEmail({
+      to: data.to,
+      subject: data.subject,
+      htmlBody: data.html
+    });
+    return ContentService.createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`}
+                        </pre>
+                      </li>
+                      <li>Guji <strong>Deploy</strong> &rarr; <strong>New Deployment</strong> (dhinaca sare).</li>
+                      <li>Dooro <strong>Web App</strong> (calamada gear-ka hadii uusan doorneen).</li>
+                      <li>U dooro Execute As: <strong>Me</strong> iyo Who has access: <strong>Anyone</strong> (tani waa muhiim).</li>
+                      <li>Guji <strong>Deploy</strong>, dabadeed oggolaanshaha sii (Authorize access), nuqul ka qaado <strong>Web App URL</strong> oo ku dheji sanduuqa sare.</li>
+                    </ol>
+                  </div>
+                </>
+              ) : (!smtp.provider || smtp.provider === 'smtp') ? (
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="form-group">
@@ -600,50 +651,6 @@ function App() {
                 <button type="button" className="btn-action flex-1 justify-center" onClick={sendTestEmail} disabled={isLoading || !isConfigured}>
                   Tijaabi Email-ka
                 </button>
-              </div>
-            </form>
-          </div>
-
-          {/* Database Config */}
-          <div className="glass-card">
-            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-              <Shield color="#007aff" /> Supabase Connection
-            </h2>
-            
-            <form onSubmit={handleSaveSupabase}>
-              <div className="form-group">
-                <label>Supabase URL</label>
-                <input 
-                  type="text" 
-                  className="input-field"
-                  placeholder="https://xyz.supabase.co"
-                  value={supabaseConfig.url}
-                  onChange={(e) => setSupabaseConfig({...supabaseConfig, url: e.target.value})}
-                />
-              </div>
-              
-              <div className="form-group">
-                <label>Supabase Anon Key</label>
-                <input 
-                  type="password" 
-                  className="input-field"
-                  placeholder="eyJhbGciOi..."
-                  value={supabaseConfig.key}
-                  onChange={(e) => setSupabaseConfig({...supabaseConfig, key: e.target.value})}
-                />
-              </div>
-              
-              <button type="submit" className="btn btn-primary w-full">
-                Xaqiiji & Kaydi
-              </button>
-              
-              <div className="mt-6 p-4 rounded-lg bg-white/5 border border-white/5 text-xs text-gray-400">
-                <p className="font-semibold text-white mb-2">Sida loo diyaariyo Supabase:</p>
-                <ol className="list-decimal list-inside space-y-1">
-                  <li>Sameyso mashruuc bilaash ah oo Supabase ah.</li>
-                  <li>Ku shub shaxda SQL ee ku jirta faylka <code>supabase_setup.sql</code> qaybta SQL Editor.</li>
-                  <li>Nuqul ka qaado URL-ka iyo API Key, kuna kaydi halkan.</li>
-                </ol>
               </div>
             </form>
           </div>
