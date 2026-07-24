@@ -718,12 +718,12 @@ label {
 
 .player-column {
   flex: 7.5;
-  padding: 0 !important;
+  padding: 40px !important;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: center;
   justify-content: center;
-  background-color: var(--player-bg);
+  background: radial-gradient(circle at center, #1b1735 0%, #080912 100%);
   height: 100% !important;
   max-height: 100% !important;
   overflow: hidden !important;
@@ -748,7 +748,10 @@ label {
   max-height: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  background-color: var(--player-bg);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px rgba(94, 23, 245, 0.05);
+  background-color: #000;
 }
 
 .video-aspect-wrapper iframe {
@@ -1151,4 +1154,166 @@ label {
   background: linear-gradient(135deg, var(--accent-primary) 0%, #7c3aed 100%);
   color: #fff;
   box-shadow: 0 2px 8px rgba(94, 23, 245, 0.35);
+}
+
+/* Segmented Control for Watch Modal Tabs */
+.segmented-control {
+  display: flex;
+  background: var(--surface-solid-2);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 20px;
+  gap: 4px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.segmented-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.segmented-btn:hover {
+  color: var(--text-white);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.segmented-btn.active {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, var(--accent-primary) 0%, #7c3aed 100%);
+  box-shadow: 0 4px 12px rgba(94, 23, 245, 0.3);
+}
+
+/* Note Item layout styling override */
+.note-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface-solid);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  transition: all 0.2s ease;
+}
+
+.note-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  border-color: var(--surface-2-border);
+}
+
+/* Purple glowing timestamp badge */
+.note-timestamp-btn {
+  background: #f0ebff !important;
+  color: #7c3aed !important;
+  border: 1px solid rgba(124, 58, 237, 0.15) !important;
+  border-radius: 6px !important;
+  padding: 3px 8px !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  font-family: monospace !important;
+  transition: all 0.2s ease !important;
+}
+
+.note-timestamp-btn:hover {
+  background: #7c3aed !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.25) !important;
+}
+
+/* Outline trash icon button */
+.delete-note-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 59, 48, 0.6) !important;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.delete-note-btn:hover {
+  background: rgba(255, 59, 48, 0.08) !important;
+  color: #ff3b30 !important;
+}
+
+/* Bottom Note Input Form Capsule layout */
+.sidebar-note-form {
+  margin-top: auto;
+  border-top: 1px solid var(--card-border);
+  padding-top: 16px;
+}
+
+.note-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.note-input-wrapper textarea {
+  width: 100% !important;
+  margin: 0 !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  font-size: 0.9rem !important;
+  resize: none !important;
+  line-height: 1.4 !important;
+  padding: 12px 52px 12px 16px !important;
+  background: var(--surface-solid) !important;
+  border: 1px solid var(--card-border) !important;
+  border-radius: 24px !important;
+  color: var(--text-white) !important;
+  outline: none !important;
+  overflow: hidden !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.note-input-wrapper textarea:focus {
+  border-color: var(--accent-primary) !important;
+  box-shadow: 0 0 0 3px rgba(94, 23, 245, 0.15) !important;
+}
+
+.note-submit-btn {
+  position: absolute;
+  right: 4px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50% !important;
+  background: var(--accent-primary);
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(94, 23, 245, 0.25);
+}
+
+.note-submit-btn:hover {
+  background: #4c11ce;
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px rgba(94, 23, 245, 0.4);
+}
+
+.note-submit-btn:active {
+  transform: scale(0.95);
 }

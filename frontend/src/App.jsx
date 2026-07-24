@@ -4,7 +4,8 @@ import {
   Bell, BellOff, Settings, Users, Video, Plus, Trash2,
   Mail, Shield, RefreshCw, AlertCircle, Youtube, CheckCircle2, Play,
   Eye, EyeOff, ListVideo, GripVertical, Maximize, Minimize,
-  Sun, Moon, LogOut, User, ChevronDown, Music2, Volume2, VolumeX
+  Sun, Moon, LogOut, User, ChevronDown, Music2, Volume2, VolumeX,
+  FileText
 } from 'lucide-react';
 
 // Permissions delegated to TikTok embed iframes (set directly in JSX so they
@@ -2295,21 +2296,21 @@ function App() {
                 <div className="notes-column">
                   {/* Sidebar Tabs */}
                   {activePlayer.channel.platform === 'youtube' && (
-                    <div className="tabs" style={{ display: 'flex', width: '100%', marginBottom: '16px', background: 'rgba(255,255,255,0.02)' }}>
+                    <div className="segmented-control">
                       <button 
                         type="button"
-                        className={`tab-btn ${activeTabInModal === 'notes' ? 'active' : ''}`}
+                        className={`segmented-btn ${activeTabInModal === 'notes' ? 'active' : ''}`}
                         onClick={() => setActiveTabInModal('notes')}
-                        style={{ flex: 1, textAlign: 'center', padding: '6px 10px', fontSize: '0.8rem' }}
                       >
+                        <FileText size={16} />
                         Qoraalada
                       </button>
                       <button 
                         type="button"
-                        className={`tab-btn ${activeTabInModal === 'playlist' ? 'active' : ''}`}
+                        className={`segmented-btn ${activeTabInModal === 'playlist' ? 'active' : ''}`}
                         onClick={() => setActiveTabInModal('playlist')}
-                        style={{ flex: 1, textAlign: 'center', padding: '6px 10px', fontSize: '0.8rem' }}
                       >
+                        <ListVideo size={16} />
                         Muuqaalada
                       </button>
                     </div>
@@ -2330,43 +2331,23 @@ function App() {
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             {notes.map((note) => (
-                              <div key={note.id} className="note-item" style={{
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                justifyContent: 'space-between',
-                                gap: '10px',
-                                background: 'rgba(255,255,255,0.02)',
-                                border: '1px solid var(--card-border)',
-                                borderRadius: '8px',
-                                padding: '8px 10px'
-                              }}>
+                              <div key={note.id} className="note-item">
                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                                   {activePlayer.videoId && activePlayer.channel.platform === 'youtube' ? (
                                     <button
                                       type="button"
                                       className="note-timestamp-btn"
                                       onClick={() => seekPlayerTo(note.timestamp_seconds)}
-                                      style={{
-                                        background: 'rgba(255, 59, 48, 0.1)',
-                                        color: 'var(--primary-red)',
-                                        border: '1px solid rgba(255, 59, 48, 0.2)',
-                                        borderRadius: '4px',
-                                        padding: '2px 6px',
-                                        fontSize: '0.75rem',
-                                        fontWeight: 700,
-                                        cursor: 'pointer',
-                                        fontFamily: 'monospace'
-                                      }}
                                     >
                                       {formatTimestamp(note.timestamp_seconds)}
                                     </button>
                                   ) : activePlayer.videoId ? (
                                     <span style={{
-                                      background: 'rgba(255,255,255,0.06)',
-                                      color: 'var(--text-muted)',
-                                      border: '1px solid var(--card-border)',
-                                      borderRadius: '4px',
-                                      padding: '2px 6px',
+                                      background: '#f3f4f6',
+                                      color: '#4b5563',
+                                      border: '1px solid rgba(75, 85, 99, 0.15)',
+                                      borderRadius: '6px',
+                                      padding: '4px 8px',
                                       fontSize: '0.75rem',
                                       fontWeight: 700,
                                       fontFamily: 'monospace'
@@ -2375,12 +2356,12 @@ function App() {
                                     </span>
                                   ) : (
                                     <span style={{
-                                      background: 'rgba(52, 199, 89, 0.1)',
-                                      color: 'var(--secondary-green)',
-                                      border: '1px solid rgba(52, 199, 89, 0.2)',
-                                      borderRadius: '4px',
-                                      padding: '2px 6px',
-                                      fontSize: '0.7rem',
+                                      background: '#e6fffa',
+                                      color: '#0d9488',
+                                      border: '1px solid rgba(13, 148, 136, 0.15)',
+                                      borderRadius: '6px',
+                                      padding: '4px 8px',
+                                      fontSize: '0.75rem',
                                       fontWeight: 700,
                                     }}>
                                       LIVE
@@ -2393,10 +2374,10 @@ function App() {
                                 <button 
                                   type="button" 
                                   onClick={() => handleDeleteNote(note.id)}
-                                  style={{ background: 'none', border: 'none', color: 'var(--text-dimmed)', cursor: 'pointer', padding: '2px' }}
+                                  className="delete-note-btn"
                                   title="Tirtir note-ka"
                                 >
-                                  <Trash2 size={12} style={{ color: 'var(--primary-red)' }} />
+                                  <Trash2 size={14} />
                                 </button>
                               </div>
                             ))}
@@ -2406,32 +2387,16 @@ function App() {
 
                       {/* Note Form (Only if position is Sidebar) */}
                       {noteInputPosition === 'sidebar' && (
-                        <form onSubmit={handleAddNote} style={{ marginTop: 'auto', borderTop: '1px solid var(--card-border)', paddingTop: '12px' }}>
-                          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+                        <form onSubmit={handleAddNote} className="sidebar-note-form">
+                          <div className="note-input-wrapper">
                             <textarea 
-                              className="input-field sidebar-textarea" 
+                              className="sidebar-textarea" 
                               placeholder="Qor note..."
                               value={newNoteText}
                               onChange={(e) => {
                                 setNewNoteText(e.target.value);
-                                e.target.style.height = '40px';
+                                e.target.style.height = '44px';
                                 e.target.style.height = `${e.target.scrollHeight}px`;
-                              }}
-                              style={{ 
-                                margin: 0, 
-                                flex: 1, 
-                                height: '40px', 
-                                minHeight: '40px',
-                                fontSize: '0.9rem',
-                                resize: 'none',
-                                lineHeight: '1.4',
-                                padding: '8px 12px',
-                                background: 'rgba(255,255,255,0.08)',
-                                border: 'none',
-                                borderRadius: '8px',
-                                color: '#fff',
-                                outline: 'none',
-                                overflow: 'hidden'
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -2441,8 +2406,8 @@ function App() {
                               }}
                               required
                             />
-                            <button type="submit" className="btn btn-primary" style={{ padding: '0 12px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <Plus size={16} />
+                            <button type="submit" className="note-submit-btn">
+                              <Plus size={18} />
                             </button>
                           </div>
                         </form>
