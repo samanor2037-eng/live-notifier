@@ -523,11 +523,42 @@ app.get('/api/channel-videos', async (req, res) => {
   try {
     if (platform === 'youtube') {
       const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channel_id}`;
-      const response = await fetch(rssUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch YouTube RSS: Status ${response.status}`);
+      const streamsUrl = `https://www.youtube.com/channel/${channel_id}/streams`;
+
+      // Fetch RSS and Streams page in parallel
+      const [rssResponse, streamsResponse] = await Promise.all([
+        fetch(rssUrl),
+        fetch(streamsUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9'
+          }
+        }).catch(err => {
+          console.error("Failed to fetch YouTube streams page:", err.message);
+          return null;
+        })
+      ]);
+
+      if (!rssResponse.ok) {
+        throw new Error(`Failed to fetch YouTube RSS: Status ${rssResponse.status}`);
       }
-      const xml = await response.text();
+
+      // Parse live stream IDs from /streams page
+      const liveVideoIds = new Set();
+      if (streamsResponse && streamsResponse.ok) {
+        try {
+          const streamsHtml = await streamsResponse.text();
+          const regex = /"videoId":"([^"]+)"/g;
+          let match;
+          while ((match = regex.exec(streamsHtml)) !== null) {
+            liveVideoIds.add(match[1]);
+          }
+        } catch (err) {
+          console.error("Failed to parse streams HTML:", err.message);
+        }
+      }
+
+      const xml = await rssResponse.text();
       const parser = new xml2js.Parser({ explicitArray: false });
       const result = await parser.parseStringPromise(xml);
       
@@ -536,12 +567,14 @@ app.get('/api/channel-videos', async (req, res) => {
         const entries = Array.isArray(result.feed.entry) ? result.feed.entry : [result.feed.entry];
         entries.forEach(entry => {
           const videoId = entry['yt:videoId'] || entry.id?.replace('yt:video:', '') || '';
+          const isLiveVideo = liveVideoIds.has(videoId);
           videos.push({
             id: videoId,
             title: entry.title || 'Muuqaal aan magac lahayn',
             url: entry.link?.$.href || `https://www.youtube.com/watch?v=${videoId}`,
             published: entry.published,
-            thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+            thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+            is_live: isLiveVideo
           });
         });
       }

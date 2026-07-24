@@ -2218,7 +2218,7 @@ function App() {
                                 }}
                               />
                             ) : null}
-                            {video.title && (video.title.toLowerCase().includes('live') || video.title.toLowerCase().includes('toos') || video.title.toLowerCase().includes('stream')) && (
+                            {(video.is_live || (video.title && (video.title.toLowerCase().includes('live') || video.title.toLowerCase().includes('toos') || video.title.toLowerCase().includes('stream')))) && (
                               <div style={{ position: 'absolute', top: '8px', right: '8px', background: 'var(--primary-red)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 'bold', zIndex: 5, letterSpacing: '0.5px', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
                                 LIVE
                               </div>
@@ -2708,7 +2708,7 @@ function App() {
                                             if (fallback) fallback.style.display = 'flex';
                                           }}
                                         />
-                                        {video.title && (video.title.toLowerCase().includes('live') || video.title.toLowerCase().includes('toos') || video.title.toLowerCase().includes('stream')) && (
+                                        {(video.is_live || (video.title && (video.title.toLowerCase().includes('live') || video.title.toLowerCase().includes('toos') || video.title.toLowerCase().includes('stream')))) && (
                                           <span style={{ position: 'absolute', top: '2px', right: '2px', background: 'var(--primary-red)', color: 'white', fontSize: '0.5rem', fontWeight: 'bold', padding: '1px 3px', borderRadius: '2px', zIndex: 5 }}>
                                             LIVE
                                           </span>
