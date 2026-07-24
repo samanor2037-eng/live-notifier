@@ -1666,7 +1666,7 @@ function App() {
           )}
 
           {activeTab === 'manager' && (
-            <div className="glass-card max-w-lg mx-auto">
+            <div className="glass-card" style={{ maxWidth: '640px', margin: '0 auto', width: '100%' }}>
               <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '20px' }}>{t('addChannelTitle')}</h2>
               
               {/* Mode Toggle Tabs */}
@@ -1827,7 +1827,7 @@ function App() {
       )}
 
       {activeTab === 'settings' && (
-        <div className="max-w-2xl mx-auto" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ maxWidth: '640px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* E-Mail Settings Status Card */}
           <div className="glass-card" style={{ padding: '32px' }}>
             <h2 className="text-xl font-bold mb-6 flex items-center gap-3">
