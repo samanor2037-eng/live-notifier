@@ -1676,15 +1676,10 @@ function App() {
                             className="btn-action"
                             style={{ flex: 1, padding: '10px', fontSize: '0.85rem', justifyContent: 'center' }}
                             onClick={() => {
-                              const vId = channel.last_video_url
-                                ? (channel.platform === 'youtube'
-                                    ? extractYouTubeId(channel.last_video_url)
-                                    : extractTikTokId(channel.last_video_url))
-                                : null;
                               setActivePlayer({
                                 channel,
                                 type: 'video',
-                                videoId: vId
+                                videoId: null
                               });
                             }}
                           >
@@ -2097,455 +2092,547 @@ function App() {
 
             {/* Modal Body: Split screen */}
             <div className="player-modal-body">
-              {/* Left Column: Player (takes full screen if notes hidden) */}
-              <div className="player-column" style={{ flex: showNotesPanel ? 7.5 : 1 }}>
-                <div 
-                  ref={playerWrapperRef} 
-                  className="player-wrapper-container"
-                  style={{ position: 'relative', width: '100%' }}
-                >
-                  <div
-                    className={`video-aspect-wrapper${activePlayer.channel.platform === 'tiktok' && activePlayer.videoId ? ' vertical' : ''}`}
-                    style={{ pointerEvents: isDragging ? 'none' : 'auto' }}
-                  >
-                    {activePlayer.channel.platform === 'youtube' ? (
-                      <iframe 
-                        id="yt-player-iframe"
-                        src={(activePlayer.videoId && activePlayer.videoId.length === 11)
-                          ? `https://www.youtube.com/embed/${activePlayer.videoId}?autoplay=1&fs=0&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`
-                          : `https://www.youtube.com/embed/live_stream?channel=${activePlayer.channel.identifier}&autoplay=1&fs=0&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`
-                        }
-                        frameBorder="0" 
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                        allowFullScreen
-                        title="YouTube Player"
-                        style={{ width: '100%', height: '100%' }}
-                      ></iframe>
-                    ) : activePlayer.channel.platform === 'tiktok' ? (
-                      activePlayer.videoId ? (
-                        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-                          {/* player/v1 is TikTok's real inline video player (fills 100% width/height).
-                              embed/v2 renders a small preview "card" capped at 360px wide by TikTok's
-                              own CSS, which is why the video looked stuck in a small box before.
-                              The URL takes the raw video ID only -- no @username/video/ segments. */}
-                          <iframe
-                            src={`https://www.tiktok.com/player/v1/${activePlayer.videoId}?music_info=1&description=1`}
-                            frameBorder="0"
-                            allow={TIKTOK_IFRAME_ALLOW}
-                            allowFullScreen
-                            title="TikTok Player"
-                            style={{ flex: 1, width: '100%', height: '100%' }}
-                          ></iframe>
-                          <div style={{ display: 'flex', padding: '10px', background: 'rgba(0,0,0,0.4)', gap: '10px', alignItems: 'center' }}>
-                            <button
-                              type="button"
-                              className="btn btn-action"
-                              onClick={() => {
-                                setActivePlayer(prev => ({ ...prev, videoId: null }));
-                                setNewNoteText('');
-                              }}
-                              style={{ height: '32px', padding: '0 12px', fontSize: '0.8rem', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--card-border)' }}
-                            >
-                              {t('backBtn')}
-                            </button>
-                            <input 
-                              type="text" 
-                              placeholder={t('tiktokLinkFieldPlaceholder')} 
-                              className="input-field" 
-                              style={{ flex: 1, fontSize: '0.8rem', height: '32px', padding: '0 10px', background: 'rgba(255,255,255,0.06)' }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  const url = e.target.value.trim();
-                                  const vId = extractTikTokId(url);
-                                  if (vId) {
-                                    addVideoIfMissing(vId, { url });
-                                    setActivePlayer(prev => ({ ...prev, videoId: vId, type: 'video' }));
-                                    e.target.value = '';
-                                  } else {
-                                    showToast(t('toastInvalidTikTokLink'), 'error');
-                                  }
-                                }
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', padding: '16px', boxSizing: 'border-box', overflowY: 'auto' }}>
-                          <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '12px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.85rem' }}>
-                              {t('tiktokLinkPrompt')}
-                            </p>
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                              <input 
-                                type="text" 
-                                placeholder={t('pasteTiktokPlaceholder')} 
-                                className="input-field" 
-                                value={tiktokInputUrl}
-                                onChange={(e) => setTiktokInputUrl(e.target.value)}
-                                style={{ flex: 1, fontSize: '0.85rem', height: '36px', padding: '0 12px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--card-border)', color: 'white', borderRadius: '6px' }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    const url = tiktokInputUrl.trim();
-                                    const vId = extractTikTokId(url);
-                                    if (vId) {
-                                      addVideoIfMissing(vId, { url });
-                                      setActivePlayer(prev => ({ ...prev, videoId: vId, type: 'video' }));
-                                      setTiktokInputUrl('');
-                                    } else {
-                                      showToast(t('toastInvalidTikTokLink'), 'error');
-                                    }
-                                  }
+              {activePlayer.type === 'video' && !activePlayer.videoId ? (
+                <div className="modal-videos-grid-container" style={{ width: '100%', height: '100%', padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--card-border)', paddingBottom: '12px' }}>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-white)', margin: 0 }}>
+                      {t('playlistTitle')}
+                    </h3>
+                    {activePlayer.channel.platform === 'tiktok' && (
+                      <div style={{ display: 'flex', gap: '8px', width: '400px' }}>
+                        <input 
+                          type="text" 
+                          placeholder={t('tiktokLinkFieldPlaceholder')} 
+                          className="input-field" 
+                          style={{ flex: 1, fontSize: '0.8rem', height: '36px', padding: '0 10px', margin: 0 }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const url = e.target.value.trim();
+                              const vId = extractTikTokId(url);
+                              if (vId) {
+                                addVideoIfMissing(vId, { url });
+                                setActivePlayer(prev => ({ ...prev, videoId: vId }));
+                                e.target.value = '';
+                              } else {
+                                showToast(t('toastInvalidTikTokLink'), 'error');
+                              }
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {isLoadingVideos ? (
+                    <div style={{ textAlign: 'center', color: 'var(--text-dimmed)', padding: '80px 20px', fontSize: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                      <RefreshCw className="spin" size={32} style={{ color: 'var(--accent-primary)' }} />
+                      {activePlayer.channel.platform === 'tiktok' ? t('loadingTiktok') : t('loadingPlaylist')}
+                    </div>
+                  ) : channelVideos.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: 'var(--text-dimmed)', padding: '80px 20px', fontSize: '1rem' }}>
+                      {t('noVideosFound')}
+                    </div>
+                  ) : (
+                    <div className={`videos-grid${activePlayer.channel.platform === 'tiktok' ? ' tiktok' : ''}`}>
+                      {channelVideos.map((video) => (
+                        <div 
+                          key={video.id} 
+                          className="grid-video-card"
+                          onClick={() => {
+                            setActivePlayer(prev => ({
+                              ...prev,
+                              videoId: video.id
+                            }));
+                          }}
+                        >
+                          <div className="grid-video-thumbnail-wrapper">
+                            {video.thumbnail ? (
+                              <img 
+                                src={video.thumbnail} 
+                                alt={video.title} 
+                                className="grid-video-thumbnail"
+                                referrerPolicy="no-referrer"
+                                loading="lazy"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  const fallback = e.target.parentNode.querySelector('.grid-video-fallback');
+                                  if (fallback) fallback.style.display = 'flex';
                                 }}
                               />
-                              <button 
-                                className="btn btn-primary"
-                                style={{ height: '36px', padding: '0 16px', fontSize: '0.85rem' }}
-                                onClick={() => {
-                                  const url = tiktokInputUrl.trim();
-                                  const vId = extractTikTokId(url);
-                                  if (vId) {
-                                    addVideoIfMissing(vId, { url });
-                                    setActivePlayer(prev => ({ ...prev, videoId: vId, type: 'video' }));
-                                    setTiktokInputUrl('');
-                                  } else {
-                                    showToast(t('toastInvalidTikTokLink'), 'error');
-                                  }
-                                }}
-                              >
-                                {t('watchNowBtn')}
-                              </button>
+                            ) : null}
+                            <div className="grid-video-fallback" style={{ display: video.thumbnail ? 'none' : 'flex' }}>
+                              <Youtube size={28} />
                             </div>
                           </div>
-
-                          {/* Latest videos grid fetched by the backend (TikTok's own creator
-                              embed widget is unreliable: it stays 1px tall when its resize
-                              handshake fails, so we render our own list instead). */}
-                          <div style={{ flex: 1, minHeight: '400px', width: '100%' }}>
-                            {isLoadingVideos ? (
-                              <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '30px 0' }}>
-                                {t('loadingTiktok')}
-                              </p>
-                            ) : channelVideos.length > 0 ? (
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px' }}>
-                                {channelVideos.map(video => (
-                                  <div
-                                    key={video.id}
-                                    onClick={() => setActivePlayer(prev => ({ ...prev, videoId: video.id, type: 'video' }))}
-                                    style={{ cursor: 'pointer', borderRadius: '10px', overflow: 'hidden', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--card-border)' }}
-                                  >
-                                    {video.thumbnail && (
-                                      <img
-                                        src={video.thumbnail}
-                                        alt={video.title}
-                                        referrerPolicy="no-referrer"
-                                        loading="lazy"
-                                        style={{ width: '100%', aspectRatio: '9 / 16', objectFit: 'cover', display: 'block' }}
-                                      />
-                                    )}
-                                    <p style={{ margin: 0, padding: '8px 10px', fontSize: '0.75rem', color: 'var(--text-white)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                                      {video.title}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              /* Fallback: frame TikTok's server-rendered creator page directly */
-                              <iframe
-                                src={`https://www.tiktok.com/embed/@${activePlayer.channel.identifier}?lang=en-US`}
-                                frameBorder="0"
-                                allow={TIKTOK_IFRAME_ALLOW}
-                                title="TikTok Creator"
-                                style={{ width: '100%', height: '100%', minHeight: '480px', border: 0, borderRadius: '12px' }}
-                              ></iframe>
+                          <div className="grid-video-info">
+                            <h4 className="grid-video-title" title={video.title}>
+                              {video.title}
+                            </h4>
+                            {video.published_at && (
+                              <span className="grid-video-date">
+                                {new Date(video.published_at).toLocaleDateString(language === 'so' ? 'so-SO' : 'en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric'
+                                })}
+                              </span>
                             )}
                           </div>
                         </div>
-                      )
-                    ) : null}
-                  </div>
-
-                  {/* Floating Note Input Overlay (Only for recorded videos and when position is overlay) */}
-                  {noteInputPosition === 'overlay' && activePlayer.type === 'video' && (
-                    <form 
-                      onSubmit={handleAddNote} 
-                      className="note-input-overlay"
-                      style={{
-                        position: 'absolute',
-                        left: `${overlayPos.x}px`,
-                        top: `${overlayPos.y}px`,
-                        margin: 0
-                      }}
-                    >
-                      <div 
-                        className="drag-handle" 
-                        onMouseDown={handleDragMouseDown}
-                        onTouchStart={handleDragTouchStart}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'move', width: '20px', height: '36px', color: 'rgba(255,255,255,0.4)', userSelect: 'none' }}
-                      >
-                        <GripVertical size={16} />
-                      </div>
-                      <textarea 
-                        className="input-field overlay-textarea" 
-                        placeholder="Qor note..."
-                        value={newNoteText}
-                        onChange={(e) => {
-                          setNewNoteText(e.target.value);
-                          e.target.style.height = '36px';
-                          e.target.style.height = `${e.target.scrollHeight}px`;
-                        }}
-                        style={{ 
-                          margin: 0, 
-                          flex: 1, 
-                          height: '36px', 
-                          minHeight: '36px', 
-                          padding: '8px 12px', 
-                          fontSize: '0.8rem', 
-                          background: 'rgba(255,255,255,0.08)',
-                          resize: 'none',
-                          lineHeight: '1.4',
-                          border: 'none',
-                          borderRadius: '8px',
-                          color: '#fff',
-                          outline: 'none',
-                          overflow: 'hidden'
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleAddNote(e);
-                          }
-                        }}
-                        required
-                      />
-                      <button type="submit" className="btn btn-primary" style={{ padding: '0 12px', height: '36px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Plus size={14} />
-                      </button>
-                    </form>
-                  )}
-                </div>
-              </div>
-
-              {/* Right Column: Sidebar (Notes & Playlist) */}
-              {showNotesPanel && (
-                <div className="notes-column">
-                  {/* Sidebar Tabs */}
-                  {activePlayer.channel.platform === 'youtube' && (
-                    <div className="segmented-control">
-                      <button 
-                        type="button"
-                        className={`segmented-btn ${activeTabInModal === 'notes' ? 'active' : ''}`}
-                        onClick={() => setActiveTabInModal('notes')}
-                      >
-                        <FileText size={16} />
-                        {t('watchTabNotes')}
-                      </button>
-                      <button 
-                        type="button"
-                        className={`segmented-btn ${activeTabInModal === 'playlist' ? 'active' : ''}`}
-                        onClick={() => setActiveTabInModal('playlist')}
-                      >
-                        <ListVideo size={16} />
-                        {t('watchTabPlaylist')}
-                      </button>
+                      ))}
                     </div>
                   )}
-
-                  {activeTabInModal === 'notes' || activePlayer.channel.platform !== 'youtube' ? (
-                    <>
-                      <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '12px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px', color: 'var(--text-white)' }}>
-                        {t('notesTitle')}
-                      </h4>
-
-                      {/* Notes List */}
-                      <div className="notes-list-container">
-                        {notes.length === 0 ? (
-                          <div style={{ textAlign: 'center', color: 'var(--text-dimmed)', padding: '40px 20px', fontSize: '0.85rem' }}>
-                            {t('emptyNotes')}
-                          </div>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            {notes.map((note) => (
-                              <div key={note.id} className="note-item">
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-                                  {activePlayer.videoId && activePlayer.channel.platform === 'youtube' ? (
-                                    <button
-                                      type="button"
-                                      className="note-timestamp-btn"
-                                      onClick={() => seekPlayerTo(note.timestamp_seconds)}
-                                    >
-                                      {formatTimestamp(note.timestamp_seconds)}
-                                    </button>
-                                  ) : activePlayer.videoId ? (
-                                    <span style={{
-                                      background: '#f3f4f6',
-                                      color: '#4b5563',
-                                      border: '1px solid rgba(75, 85, 99, 0.15)',
-                                      borderRadius: '6px',
-                                      padding: '4px 8px',
-                                      fontSize: '0.75rem',
-                                      fontWeight: 700,
-                                      fontFamily: 'monospace'
-                                    }}>
-                                      NOTE
-                                    </span>
-                                  ) : (
-                                    <span style={{
-                                      background: '#e6fffa',
-                                      color: '#0d9488',
-                                      border: '1px solid rgba(13, 148, 136, 0.15)',
-                                      borderRadius: '6px',
-                                      padding: '4px 8px',
-                                      fontSize: '0.75rem',
-                                      fontWeight: 700,
-                                    }}>
-                                      LIVE
-                                    </span>
-                                  )}
-                                  <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-white)', wordBreak: 'break-word', flex: 1, lineHeight: '1.4' }}>
-                                    {note.note_text}
-                                  </p>
-                                </div>
-                                <button 
-                                  type="button" 
-                                  onClick={() => handleDeleteNote(note.id)}
-                                  className="delete-note-btn"
-                                  title="Tirtir note-ka"
+                </div>
+              ) : (
+                <>
+                  {/* Left Column: Player (takes full screen if notes hidden) */}
+                  <div className="player-column" style={{ flex: showNotesPanel ? 7.5 : 1 }}>
+                    <div 
+                      ref={playerWrapperRef} 
+                      className="player-wrapper-container"
+                      style={{ position: 'relative', width: '100%' }}
+                    >
+                      <div
+                        className={`video-aspect-wrapper${activePlayer.channel.platform === 'tiktok' && activePlayer.videoId ? ' vertical' : ''}`}
+                        style={{ pointerEvents: isDragging ? 'none' : 'auto' }}
+                      >
+                        {activePlayer.channel.platform === 'youtube' ? (
+                          <iframe 
+                            id="yt-player-iframe"
+                            src={(activePlayer.videoId && activePlayer.videoId.length === 11)
+                              ? `https://www.youtube.com/embed/${activePlayer.videoId}?autoplay=1&fs=0&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`
+                              : `https://www.youtube.com/embed/live_stream?channel=${activePlayer.channel.identifier}&autoplay=1&fs=0&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`
+                            }
+                            frameBorder="0" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                            allowFullScreen
+                            title="YouTube Player"
+                            style={{ width: '100%', height: '100%' }}
+                          ></iframe>
+                        ) : activePlayer.channel.platform === 'tiktok' ? (
+                          activePlayer.videoId ? (
+                            <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                              {/* player/v1 is TikTok's real inline video player (fills 100% width/height).
+                                  embed/v2 renders a small preview "card" capped at 360px wide by TikTok's
+                                  own CSS, which is why the video looked stuck in a small box before.
+                                  The URL takes the raw video ID only -- no @username/video/ segments. */}
+                              <iframe
+                                src={`https://www.tiktok.com/player/v1/${activePlayer.videoId}?music_info=1&description=1`}
+                                frameBorder="0"
+                                allow={TIKTOK_IFRAME_ALLOW}
+                                allowFullScreen
+                                title="TikTok Player"
+                                style={{ flex: 1, width: '100%', height: '100%' }}
+                              ></iframe>
+                              <div style={{ display: 'flex', padding: '10px', background: 'rgba(0,0,0,0.4)', gap: '10px', alignItems: 'center' }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-action"
+                                  onClick={() => {
+                                    setActivePlayer(prev => ({ ...prev, videoId: null }));
+                                    setNewNoteText('');
+                                  }}
+                                  style={{ height: '32px', padding: '0 12px', fontSize: '0.8rem', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--card-border)' }}
                                 >
-                                  <Trash2 size={14} />
+                                  {t('backBtn')}
                                 </button>
+                                <input 
+                                  type="text" 
+                                  placeholder={t('tiktokLinkFieldPlaceholder')} 
+                                  className="input-field" 
+                                  style={{ flex: 1, fontSize: '0.8rem', height: '32px', padding: '0 10px', background: 'rgba(255,255,255,0.06)' }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const url = e.target.value.trim();
+                                      const vId = extractTikTokId(url);
+                                      if (vId) {
+                                        addVideoIfMissing(vId, { url });
+                                        setActivePlayer(prev => ({ ...prev, videoId: vId, type: 'video' }));
+                                        e.target.value = '';
+                                      } else {
+                                        showToast(t('toastInvalidTikTokLink'), 'error');
+                                      }
+                                    }
+                                  }}
+                                />
                               </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Note Form (Only if position is Sidebar) */}
-                      {noteInputPosition === 'sidebar' && (
-                        <form onSubmit={handleAddNote} className="sidebar-note-form">
-                          <div className="note-input-wrapper">
-                            <textarea 
-                              className="sidebar-textarea" 
-                              placeholder={t('writeNotePlaceholder')}
-                              value={newNoteText}
-                              onChange={(e) => {
-                                setNewNoteText(e.target.value);
-                                e.target.style.height = '44px';
-                                e.target.style.height = `${e.target.scrollHeight}px`;
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                  e.preventDefault();
-                                  handleAddNote(e);
-                                }
-                              }}
-                              required
-                            />
-                            <button type="submit" className="note-submit-btn">
-                              <Plus size={18} />
-                            </button>
-                          </div>
-                        </form>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '12px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px', color: 'var(--text-white)' }}>
-                        {t('playlistTitle')}
-                      </h4>
-
-                      {/* Video Playlist */}
-                      <div className="notes-list-container">
-                        {isLoadingVideos ? (
-                          <div style={{ textAlign: 'center', color: 'var(--text-dimmed)', padding: '40px 20px', fontSize: '0.85rem' }}>
-                            {t('loadingPlaylist')}
-                          </div>
-                        ) : channelVideos.length === 0 ? (
-                          <div style={{ textAlign: 'center', color: 'var(--text-dimmed)', padding: '40px 20px', fontSize: '0.85rem' }}>
-                            {t('noVideosFound')}
-                          </div>
-                        ) : (
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '12px' }}>
-                            {channelVideos.map((video) => (
-                              <div 
-                                key={video.id} 
-                                className="playlist-video-item"
-                                onClick={() => {
-                                  // Switch player source
-                                  setActivePlayer(prev => ({
-                                    ...prev,
-                                    type: 'video',
-                                    videoId: video.id
-                                  }));
-                                }}
-                                style={{
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  gap: '8px',
-                                  background: activePlayer.videoId === video.id ? 'rgba(94, 23, 245, 0.08)' : 'rgba(255,255,255,0.02)',
-                                  border: activePlayer.videoId === video.id ? '1px solid var(--accent-primary)' : '1px solid var(--card-border)',
-                                  borderRadius: '10px',
-                                  padding: '8px',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.2s',
-                                  overflow: 'hidden'
-                                }}
-                              >
-                                {video.thumbnail ? (
-                                  <img 
-                                    src={video.thumbnail} 
-                                    alt={video.title} 
-                                    style={{ width: '100%', aspectRatio: '16/9', borderRadius: '6px', objectFit: 'cover' }}
-                                    onError={(e) => {
-                                      e.target.style.display = 'none';
-                                      const fallback = e.target.parentNode.querySelector('.video-thumb-fallback');
-                                      if (fallback) fallback.style.display = 'flex';
+                            </div>
+                          ) : (
+                            <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', padding: '16px', boxSizing: 'border-box', overflowY: 'auto' }}>
+                              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '12px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.85rem' }}>
+                                  {t('tiktokLinkPrompt')}
+                                </p>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                  <input 
+                                    type="text" 
+                                    placeholder={t('pasteTiktokPlaceholder')} 
+                                    className="input-field" 
+                                    value={tiktokInputUrl}
+                                    onChange={(e) => setTiktokInputUrl(e.target.value)}
+                                    style={{ flex: 1, fontSize: '0.85rem', height: '36px', padding: '0 12px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--card-border)', color: 'white', borderRadius: '6px' }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        const url = tiktokInputUrl.trim();
+                                        const vId = extractTikTokId(url);
+                                        if (vId) {
+                                          addVideoIfMissing(vId, { url });
+                                          setActivePlayer(prev => ({ ...prev, videoId: vId, type: 'video' }));
+                                          setTiktokInputUrl('');
+                                        } else {
+                                          showToast(t('toastInvalidTikTokLink'), 'error');
+                                        }
+                                      }
                                     }}
                                   />
-                                ) : null}
-                                <div 
-                                  className="video-thumb-fallback"
-                                  style={{ 
-                                    width: '100%', 
-                                    aspectRatio: '16/9', 
-                                    borderRadius: '6px', 
-                                    background: 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%)', 
-                                    border: '1px solid var(--card-border)',
-                                    display: video.thumbnail ? 'none' : 'flex', 
-                                    alignItems: 'center', 
-                                    justifyContent: 'center',
-                                    color: 'var(--text-muted)',
-                                    fontWeight: 'bold',
-                                    fontSize: '0.65rem'
-                                  }}
-                                >
-                                  {activePlayer.channel.platform === 'tiktok' ? 'TIKTOK' : 'VIDEO'}
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-                                  <div style={{
-                                    fontSize: '0.75rem',
-                                    fontWeight: 700,
-                                    color: activePlayer.videoId === video.id ? 'white' : 'var(--text-white)',
-                                    textOverflow: 'ellipsis',
-                                    overflow: 'hidden',
-                                    display: '-webkit-box',
-                                    WebkitLineClamp: 2,
-                                    WebkitBoxOrient: 'vertical',
-                                    lineHeight: '1.2'
-                                  }}>
-                                    {video.title}
-                                  </div>
-                                  <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: 'auto', paddingTop: '4px' }}>
-                                    {video.published ? new Date(video.published).toLocaleDateString() : ''}
-                                  </div>
+                                  <button 
+                                    className="btn btn-primary"
+                                    style={{ height: '36px', padding: '0 16px', fontSize: '0.85rem' }}
+                                    onClick={() => {
+                                      const url = tiktokInputUrl.trim();
+                                      const vId = extractTikTokId(url);
+                                      if (vId) {
+                                        addVideoIfMissing(vId, { url });
+                                        setActivePlayer(prev => ({ ...prev, videoId: vId, type: 'video' }));
+                                        setTiktokInputUrl('');
+                                      } else {
+                                        showToast(t('toastInvalidTikTokLink'), 'error');
+                                      }
+                                    }}
+                                  >
+                                    {t('watchNowBtn')}
+                                  </button>
                                 </div>
                               </div>
-                            ))}
-                          </div>
-                        )}
+
+                              {/* Latest videos grid fetched by the backend (TikTok's own creator
+                                  embed widget is unreliable: it stays 1px tall when its resize
+                                  handshake fails, so we render our own list instead). */}
+                              <div style={{ flex: 1, minHeight: '400px', width: '100%' }}>
+                                {isLoadingVideos ? (
+                                  <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '30px 0' }}>
+                                    {t('loadingTiktok')}
+                                  </p>
+                                ) : channelVideos.length > 0 ? (
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px' }}>
+                                    {channelVideos.map(video => (
+                                      <div
+                                        key={video.id}
+                                        onClick={() => setActivePlayer(prev => ({ ...prev, videoId: video.id, type: 'video' }))}
+                                        style={{ cursor: 'pointer', borderRadius: '10px', overflow: 'hidden', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--card-border)' }}
+                                      >
+                                        {video.thumbnail && (
+                                          <img
+                                            src={video.thumbnail}
+                                            alt={video.title}
+                                            referrerPolicy="no-referrer"
+                                            loading="lazy"
+                                            style={{ width: '100%', aspectRatio: '9 / 16', objectFit: 'cover', display: 'block' }}
+                                          />
+                                        )}
+                                        <p style={{ margin: 0, padding: '8px 10px', fontSize: '0.75rem', color: 'var(--text-white)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                          {video.title}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  /* Fallback: frame TikTok's server-rendered creator page directly */
+                                  <iframe
+                                    src={`https://www.tiktok.com/embed/@${activePlayer.channel.identifier}?lang=en-US`}
+                                    frameBorder="0"
+                                    allow={TIKTOK_IFRAME_ALLOW}
+                                    title="TikTok Creator"
+                                    style={{ width: '100%', height: '100%', minHeight: '480px', border: 0, borderRadius: '12px' }}
+                                  ></iframe>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        ) : null}
                       </div>
-                    </>
+
+                      {/* Floating Note Input Overlay (Only for recorded videos and when position is overlay) */}
+                      {noteInputPosition === 'overlay' && activePlayer.type === 'video' && (
+                        <form 
+                          onSubmit={handleAddNote} 
+                          className="note-input-overlay"
+                          style={{
+                            position: 'absolute',
+                            left: `${overlayPos.x}px`,
+                            top: `${overlayPos.y}px`,
+                            margin: 0
+                          }}
+                        >
+                          <div 
+                            className="drag-handle" 
+                            onMouseDown={handleDragMouseDown}
+                            onTouchStart={handleDragTouchStart}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'move', width: '20px', height: '36px', color: 'rgba(255,255,255,0.4)', userSelect: 'none' }}
+                          >
+                            <GripVertical size={16} />
+                          </div>
+                          <textarea 
+                            className="input-field overlay-textarea" 
+                            placeholder={t('writeNotePlaceholder')}
+                            value={newNoteText}
+                            onChange={(e) => {
+                              setNewNoteText(e.target.value);
+                              e.target.style.height = '36px';
+                              e.target.style.height = `${e.target.scrollHeight}px`;
+                            }}
+                            style={{ 
+                              margin: 0, 
+                              flex: 1, 
+                              height: '36px', 
+                              minHeight: '36px',
+                              fontSize: '0.85rem',
+                              resize: 'none',
+                              lineHeight: '1.3',
+                              padding: '8px 12px',
+                              background: 'var(--surface-solid)',
+                              border: 'none',
+                              borderRadius: '6px',
+                              color: '#fff',
+                              outline: 'none',
+                              overflow: 'hidden'
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleAddNote(e);
+                              }
+                            }}
+                            required
+                          />
+                          <button type="submit" className="btn btn-primary" style={{ padding: '0 10px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Plus size={16} />
+                          </button>
+                        </form>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Notes / Playlist Sidebar */}
+                  {showNotesPanel && (
+                    <div className="notes-column">
+                      {activePlayer.channel.platform === 'youtube' && (
+                        <div className="segmented-control">
+                          <button 
+                            type="button"
+                            className={`segmented-btn ${activeTabInModal === 'notes' ? 'active' : ''}`}
+                            onClick={() => setActiveTabInModal('notes')}
+                          >
+                            <FileText size={16} />
+                            {t('watchTabNotes')}
+                          </button>
+                          <button 
+                            type="button"
+                            className={`segmented-btn ${activeTabInModal === 'playlist' ? 'active' : ''}`}
+                            onClick={() => setActiveTabInModal('playlist')}
+                          >
+                            <ListVideo size={16} />
+                            {t('watchTabPlaylist')}
+                          </button>
+                        </div>
+                      )}
+
+                      {activeTabInModal === 'notes' || activePlayer.channel.platform !== 'youtube' ? (
+                        <>
+                          <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '12px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px', color: 'var(--text-white)' }}>
+                            {t('notesTitle')}
+                          </h4>
+
+                          {/* Notes List */}
+                          <div className="notes-list-container">
+                            {notes.length === 0 ? (
+                              <div style={{ textAlign: 'center', color: 'var(--text-dimmed)', padding: '40px 20px', fontSize: '0.85rem' }}>
+                                {t('emptyNotes')}
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {notes.map((note) => (
+                                  <div key={note.id} className="note-item">
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                                      {activePlayer.videoId && activePlayer.channel.platform === 'youtube' ? (
+                                        <button
+                                          type="button"
+                                          className="note-timestamp-btn"
+                                          onClick={() => seekPlayerTo(note.timestamp_seconds)}
+                                        >
+                                          {formatTimestamp(note.timestamp_seconds)}
+                                        </button>
+                                      ) : activePlayer.videoId ? (
+                                        <span style={{
+                                          background: '#f3f4f6',
+                                          color: '#4b5563',
+                                          border: '1px solid rgba(75, 85, 99, 0.15)',
+                                          borderRadius: '6px',
+                                          padding: '4px 8px',
+                                          fontSize: '0.75rem',
+                                          fontWeight: 700,
+                                          fontFamily: 'monospace'
+                                        }}>
+                                          NOTE
+                                        </span>
+                                      ) : (
+                                        <span style={{
+                                          background: '#e6fffa',
+                                          color: '#0d9488',
+                                          border: '1px solid rgba(13, 148, 136, 0.15)',
+                                          borderRadius: '6px',
+                                          padding: '4px 8px',
+                                          fontSize: '0.75rem',
+                                          fontWeight: 700,
+                                        }}>
+                                          LIVE
+                                        </span>
+                                      )}
+                                      <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-white)', wordBreak: 'break-word', flex: 1, lineHeight: '1.4' }}>
+                                        {note.note_text}
+                                      </p>
+                                    </div>
+                                    <button 
+                                      type="button" 
+                                      onClick={() => handleDeleteNote(note.id)}
+                                      className="delete-note-btn"
+                                      title="Tirtir note-ka"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Note Form (Only if position is Sidebar) */}
+                          {noteInputPosition === 'sidebar' && (
+                            <form onSubmit={handleAddNote} className="sidebar-note-form">
+                              <div className="note-input-wrapper">
+                                <textarea 
+                                  className="sidebar-textarea" 
+                                  placeholder={t('writeNotePlaceholder')}
+                                  value={newNoteText}
+                                  onChange={(e) => {
+                                    setNewNoteText(e.target.value);
+                                    e.target.style.height = '44px';
+                                    e.target.style.height = `${e.target.scrollHeight}px`;
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                      e.preventDefault();
+                                      handleAddNote(e);
+                                    }
+                                  }}
+                                  required
+                                />
+                                <button type="submit" className="note-submit-btn">
+                                  <Plus size={18} />
+                                </button>
+                              </div>
+                            </form>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '12px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px', color: 'var(--text-white)' }}>
+                            {t('playlistTitle')}
+                          </h4>
+
+                          {/* Video Playlist */}
+                          <div className="notes-list-container">
+                            {isLoadingVideos ? (
+                              <div style={{ textAlign: 'center', color: 'var(--text-dimmed)', padding: '40px 20px', fontSize: '0.85rem' }}>
+                                {t('loadingPlaylist')}
+                              </div>
+                            ) : channelVideos.length === 0 ? (
+                              <div style={{ textAlign: 'center', color: 'var(--text-dimmed)', padding: '40px 20px', fontSize: '0.85rem' }}>
+                                {t('noVideosFound')}
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                {channelVideos.map((video) => (
+                                  <div 
+                                    key={video.id} 
+                                    className="playlist-video-item"
+                                    onClick={() => {
+                                      // Switch player source
+                                      setActivePlayer(prev => ({
+                                        ...prev,
+                                        type: 'video',
+                                        videoId: video.id
+                                      }));
+                                    }}
+                                    style={{
+                                      display: 'flex',
+                                      gap: '10px',
+                                      background: activePlayer.videoId === video.id ? 'rgba(255, 59, 48, 0.08)' : 'rgba(255,255,255,0.01)',
+                                      border: activePlayer.videoId === video.id ? '1px solid rgba(255, 59, 48, 0.3)' : '1px solid var(--card-border)',
+                                      borderRadius: '8px',
+                                      padding: '8px',
+                                      cursor: 'pointer',
+                                      transition: 'all 0.2s'
+                                    }}
+                                  >
+                                    {video.thumbnail ? (
+                                      <img 
+                                        src={video.thumbnail} 
+                                        alt={video.title} 
+                                        style={{ width: '80px', height: '45px', borderRadius: '4px', objectFit: 'cover' }}
+                                        onError={(e) => {
+                                          e.target.style.display = 'none';
+                                          const fallback = e.target.parentNode.querySelector('.video-thumb-fallback');
+                                          if (fallback) fallback.style.display = 'flex';
+                                        }}
+                                      />
+                                    ) : null}
+                                    <div 
+                                      className="video-thumb-fallback"
+                                      style={{ 
+                                        width: '80px', 
+                                        height: '45px', 
+                                        borderRadius: '4px', 
+                                        background: 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%)', 
+                                        border: '1px solid var(--card-border)',
+                                        display: video.thumbnail ? 'none' : 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center',
+                                        color: 'var(--text-muted)',
+                                        fontWeight: 'bold',
+                                        fontSize: '0.65rem'
+                                      }}
+                                    >
+                                      {activePlayer.channel.platform === 'tiktok' ? 'TIKTOK' : 'VIDEO'}
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{
+                                        fontSize: '0.8rem',
+                                        fontWeight: 700,
+                                        color: activePlayer.videoId === video.id ? 'white' : 'var(--text-white)',
+                                        textOverflow: 'ellipsis',
+                                        overflow: 'hidden',
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: 'vertical',
+                                        lineHeight: '1.2'
+                                      }}>
+                                        {video.title}
+                                      </div>
+                                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                        {video.published ? new Date(video.published).toLocaleDateString() : ''}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   )}
-                </div>
+                </>
               )}
             </div>
           </div>

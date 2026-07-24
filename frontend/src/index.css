@@ -1341,3 +1341,102 @@ label {
 .note-submit-btn:active {
   transform: scale(0.95);
 }
+
+/* Grid of all videos in the modal when videoId is null */
+.modal-videos-grid-container {
+  background: var(--bg-darker);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.videos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+  padding: 10px 0 30px 0;
+}
+
+/* Vertical grid for TikTok */
+.videos-grid.tiktok {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+.videos-grid.tiktok .grid-video-thumbnail-wrapper {
+  aspect-ratio: 9 / 16;
+}
+
+.grid-video-card {
+  background: var(--surface-solid);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.grid-video-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--card-border-active);
+  box-shadow: 0 12px 24px -10px rgba(94, 23, 245, 0.15), 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.grid-video-thumbnail-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000000;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.grid-video-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.grid-video-card:hover .grid-video-thumbnail {
+  transform: scale(1.05);
+}
+
+.grid-video-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-red);
+  background: rgba(255, 59, 48, 0.05);
+}
+
+.grid-video-info {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.grid-video-title {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-white);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  height: 2.8em; /* fixed height for 2 lines */
+}
+
+.grid-video-date {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
