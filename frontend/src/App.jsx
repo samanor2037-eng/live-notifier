@@ -1664,12 +1664,12 @@ function App() {
                         </div>
                       </div>
                       
-                      <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-                        {channel.is_live ? (
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '16px', width: '100%' }}>
+                        {channel.is_live && (
                           <button
                             type="button"
                             className="btn btn-primary"
-                            style={{ flex: 1, padding: '10px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                            style={{ flex: 1.2, padding: '10px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'var(--primary-red)', border: 'none' }}
                             onClick={() => setActivePlayer({
                               channel,
                               type: 'live',
@@ -1678,22 +1678,21 @@ function App() {
                           >
                             <Play size={14} /> {t('watchLive')}
                           </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn-action"
-                            style={{ flex: 1, padding: '10px', fontSize: '0.85rem', justifyContent: 'center' }}
-                            onClick={() => {
-                              setActivePlayer({
-                                channel,
-                                type: 'video',
-                                videoId: null
-                              });
-                            }}
-                          >
-                            <Video size={14} /> {t('watchVideos')}
-                          </button>
                         )}
+                        <button
+                          type="button"
+                          className="btn-action"
+                          style={{ flex: 1, padding: '10px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                          onClick={() => {
+                            setActivePlayer({
+                              channel,
+                              type: 'video',
+                              videoId: null
+                            });
+                          }}
+                        >
+                          <Video size={14} /> {t('watchVideos')}
+                        </button>
                         <button type="button" className="btn-delete-icon" onClick={() => handleDeleteChannel(channel.id)} title={t('deleteBtn')}>
                           <Trash2 size={16} />
                         </button>
@@ -2011,8 +2010,17 @@ function App() {
                      style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
                   />
                 )}
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {activePlayer.channel.name}
+                  {activePlayer.type === 'live' ? (
+                    <span className="badge-live-stream" style={{ fontSize: '0.65rem', padding: '2px 6px', background: 'var(--primary-red)', color: 'white', borderRadius: '4px', fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                      LIVE
+                    </span>
+                  ) : (
+                    <span className="badge-recorded-video" style={{ fontSize: '0.65rem', padding: '2px 6px', background: 'rgba(255,255,255,0.08)', color: 'var(--text-muted)', borderRadius: '4px', fontWeight: 'bold', border: '1px solid var(--card-border)', letterSpacing: '0.5px' }}>
+                      VIDEO
+                    </span>
+                  )}
                 </h3>
               </div>
               
@@ -2462,7 +2470,7 @@ function App() {
                                 {notes.map((note) => (
                                   <div key={note.id} className="note-item">
                                     <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-                                      {activePlayer.videoId && activePlayer.channel.platform === 'youtube' ? (
+                                      {activePlayer.type === 'video' && activePlayer.videoId && activePlayer.channel.platform === 'youtube' ? (
                                         <button
                                           type="button"
                                           className="note-timestamp-btn"
@@ -2470,7 +2478,20 @@ function App() {
                                         >
                                           {formatTimestamp(note.timestamp_seconds)}
                                         </button>
-                                      ) : activePlayer.videoId ? (
+                                      ) : activePlayer.type === 'live' ? (
+                                        <span style={{
+                                          background: 'rgba(255, 59, 48, 0.1)',
+                                          color: 'var(--primary-red)',
+                                          border: '1px solid rgba(255, 59, 48, 0.2)',
+                                          borderRadius: '6px',
+                                          padding: '4px 8px',
+                                          fontSize: '0.72rem',
+                                          fontWeight: 700,
+                                          letterSpacing: '0.5px'
+                                        }}>
+                                          LIVE
+                                        </span>
+                                      ) : (
                                         <span style={{
                                           background: '#f3f4f6',
                                           color: '#4b5563',
@@ -2482,18 +2503,6 @@ function App() {
                                           fontFamily: 'monospace'
                                         }}>
                                           NOTE
-                                        </span>
-                                      ) : (
-                                        <span style={{
-                                          background: '#e6fffa',
-                                          color: '#0d9488',
-                                          border: '1px solid rgba(13, 148, 136, 0.15)',
-                                          borderRadius: '6px',
-                                          padding: '4px 8px',
-                                          fontSize: '0.75rem',
-                                          fontWeight: 700,
-                                        }}>
-                                          LIVE
                                         </span>
                                       )}
                                       <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-white)', wordBreak: 'break-word', flex: 1, lineHeight: '1.4' }}>
