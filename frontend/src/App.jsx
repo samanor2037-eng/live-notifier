@@ -278,6 +278,18 @@ function App() {
   const lastPlayTimeRef = useRef({ playerTime: 0, wallTime: 0 });
   const [avatarErrors, setAvatarErrors] = useState({});
 
+  const prevActivePlayerRef = useRef(null);
+  useEffect(() => {
+    if (activePlayer && !prevActivePlayerRef.current) {
+      if (activePlayer.type === 'video' && activePlayer.channel.platform === 'youtube') {
+        setActiveTabInModal('playlist');
+      } else {
+        setActiveTabInModal('notes');
+      }
+    }
+    prevActivePlayerRef.current = activePlayer;
+  }, [activePlayer]);
+
   const cleanAvatarUrl = (url) => {
     if (!url) return null;
     return url.replace(/&amp;/g, '&');
