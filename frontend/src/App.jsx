@@ -169,6 +169,30 @@ const translations = {
   welcomeBack: { so: 'Soo dhawoow', en: 'Welcome back' },
   welcomeSubtitle: { so: 'Waa kan cusbooneysiinta ugu dambeysay ee kanaaladaada', en: "Here's the latest update from your channels" },
   freePlan: { so: 'Qorshaha Bilaashka', en: 'Free Plan' },
+  backBtn: { so: '← Dib', en: '← Back' },
+  noteInputLabel: { so: 'Note Input:', en: 'Note Input:' },
+  noteInputSidebar: { so: 'Sidebar (Dhinaca)', en: 'Sidebar' },
+  noteInputOverlay: { so: 'Overlay (Dul-sabeeya)', en: 'Overlay' },
+  hideSidebar: { so: 'Qari Sidebar', en: 'Hide Sidebar' },
+  showSidebar: { so: 'Muuji Sidebar', en: 'Show Sidebar' },
+  exitFullscreen: { so: 'Exit Fullscreen', en: 'Exit Fullscreen' },
+  enterFullscreen: { so: 'Fullscreen', en: 'Fullscreen' },
+  goBackToLive: { so: '🔴 Ku laabo Live-ka', en: '🔴 Go back to Live' },
+  watchTabNotes: { so: 'Qoraalada', en: 'Notes' },
+  watchTabPlaylist: { so: 'Muuqaalada', en: 'Videos' },
+  notesTitle: { so: 'Qoraalada Muuqaalka (Notes)', en: 'Video Notes' },
+  emptyNotes: { so: 'Weli wax qoraal ah lagama qorin muuqaalkan.', en: 'No notes written for this video yet.' },
+  deleteNoteTooltip: { so: 'Tirtir note-ka', en: 'Delete note' },
+  writeNotePlaceholder: { so: 'Qor note...', en: 'Write a note...' },
+  playlistTitle: { so: 'Muuqaalada dhowaan la soo dhigay (Playlist)', en: 'Recently uploaded videos (Playlist)' },
+  loadingPlaylist: { so: 'Soo dejinaya liiska...', en: 'Loading playlist...' },
+  noVideosFound: { so: 'Muuqaalo lama helin.', en: 'No videos found.' },
+  pasteTiktokPlaceholder: { so: 'Tusaale: https://www.tiktok.com/@username/video/123456789', en: 'Example: https://www.tiktok.com/@username/video/123456789' },
+  tiktokLinkPrompt: { so: 'Fadlan paste-garey link-ga muuqaalka aad rabto inaad note-ka ka qaadato:', en: 'Please paste the link of the video you want to take notes on:' },
+  tiktokLinkFieldPlaceholder: { so: 'Daawada muuqaal kale (Geli link-ga TikTok)...', en: 'Watch another video (Enter TikTok link)...' },
+  watchNowBtn: { so: 'Daawo Hadda', en: 'Watch Now' },
+  loadingTiktok: { so: 'Soo raraya muuqaalada TikTok...', en: 'Loading TikTok videos...' },
+  fallbackTiktokText: { so: 'Soo dejinaya liiska...', en: 'Loading playlist...' },
 };
 
 function App() {
@@ -1962,7 +1986,7 @@ function App() {
                     }}
                     style={{ height: '32px', padding: '0 10px', fontSize: '0.8rem', gap: '4px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--card-border)', marginRight: '4px', display: 'inline-flex', alignItems: 'center' }}
                   >
-                    ← Dib
+                    {t('backBtn')}
                   </button>
                 )}
                 {activePlayer.channel.avatar_url && (
@@ -1981,23 +2005,22 @@ function App() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                 {/* Note Position Selector */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Note Input:</span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('noteInputLabel')}</span>
                   <select 
                     value={noteInputPosition}
                     onChange={(e) => setNoteInputPosition(e.target.value)}
+                    className="select-field"
                     style={{
-                      background: '#111422',
-                      border: '1px solid var(--card-border)',
-                      borderRadius: '6px',
-                      color: 'white',
-                      padding: '4px 10px',
+                      margin: 0,
+                      padding: '0 28px 0 10px',
                       fontSize: '0.8rem',
                       height: '32px',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      width: 'auto'
                     }}
                   >
-                    <option value="sidebar">Sidebar (Dhinaca)</option>
-                    {activePlayer.videoId && <option value="overlay">Overlay (Dul-sabeeya - Draggable)</option>}
+                    <option value="sidebar">{t('noteInputSidebar')}</option>
+                    {activePlayer.videoId && <option value="overlay">{t('noteInputOverlay')}</option>}
                   </select>
                 </div>
 
@@ -2010,11 +2033,11 @@ function App() {
                 >
                   {showNotesPanel ? (
                     <>
-                      <EyeOff size={14} /> Qari Sidebar
+                      <EyeOff size={14} /> {t('hideSidebar')}
                     </>
                   ) : (
                     <>
-                      <Eye size={14} /> Muuji Sidebar
+                      <Eye size={14} /> {t('showSidebar')}
                     </>
                   )}
                 </button>
@@ -2028,11 +2051,11 @@ function App() {
                 >
                   {isFullscreen ? (
                     <>
-                      <Minimize size={14} /> Exit Fullscreen
+                      <Minimize size={14} /> {t('exitFullscreen')}
                     </>
                   ) : (
                     <>
-                      <Maximize size={14} /> Fullscreen
+                      <Maximize size={14} /> {t('enterFullscreen')}
                     </>
                   )}
                 </button>
@@ -2045,7 +2068,7 @@ function App() {
                     onClick={goBackToLiveEdge}
                     style={{ height: '32px', padding: '0 12px', fontSize: '0.8rem', gap: '6px', background: 'var(--primary-red)', color: 'white', border: 'none', fontWeight: 'bold' }}
                   >
-                    🔴 Ku laabo Live-ka
+                    {t('goBackToLive')}
                   </button>
                 )}
 
@@ -2054,7 +2077,6 @@ function App() {
                   type="button" 
                   className="btn-close-modal" 
                   onClick={() => setActivePlayer(null)}
-                  style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.5rem', fontWeight: 'bold', padding: '0 5px' }}
                 >
                   ✕
                 </button>
@@ -2112,11 +2134,11 @@ function App() {
                               }}
                               style={{ height: '32px', padding: '0 12px', fontSize: '0.8rem', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--card-border)' }}
                             >
-                              ← Dib u Laabo
+                              {t('backBtn')}
                             </button>
                             <input 
                               type="text" 
-                              placeholder="Daawada muuqaal kale (Geli link-ga TikTok)..." 
+                              placeholder={t('tiktokLinkFieldPlaceholder')} 
                               className="input-field" 
                               style={{ flex: 1, fontSize: '0.8rem', height: '32px', padding: '0 10px', background: 'rgba(255,255,255,0.06)' }}
                               onKeyDown={(e) => {
@@ -2139,12 +2161,12 @@ function App() {
                         <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', padding: '16px', boxSizing: 'border-box', overflowY: 'auto' }}>
                           <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '12px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.85rem' }}>
-                              Fadlan paste-garey link-ga muuqaalka aad rabto inaad note-ka ka qaadato:
+                              {t('tiktokLinkPrompt')}
                             </p>
                             <div style={{ display: 'flex', gap: '10px' }}>
                               <input 
                                 type="text" 
-                                placeholder="Tusaale: https://www.tiktok.com/@username/video/123456789" 
+                                placeholder={t('pasteTiktokPlaceholder')} 
                                 className="input-field" 
                                 value={tiktokInputUrl}
                                 onChange={(e) => setTiktokInputUrl(e.target.value)}
@@ -2178,7 +2200,7 @@ function App() {
                                   }
                                 }}
                               >
-                                Daawo Hadda
+                                {t('watchNowBtn')}
                               </button>
                             </div>
                           </div>
@@ -2189,7 +2211,7 @@ function App() {
                           <div style={{ flex: 1, minHeight: '400px', width: '100%' }}>
                             {isLoadingVideos ? (
                               <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '30px 0' }}>
-                                Soo raraya muuqaalada TikTok...
+                                {t('loadingTiktok')}
                               </p>
                             ) : channelVideos.length > 0 ? (
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px' }}>
@@ -2303,7 +2325,7 @@ function App() {
                         onClick={() => setActiveTabInModal('notes')}
                       >
                         <FileText size={16} />
-                        Qoraalada
+                        {t('watchTabNotes')}
                       </button>
                       <button 
                         type="button"
@@ -2311,7 +2333,7 @@ function App() {
                         onClick={() => setActiveTabInModal('playlist')}
                       >
                         <ListVideo size={16} />
-                        Muuqaalada
+                        {t('watchTabPlaylist')}
                       </button>
                     </div>
                   )}
@@ -2319,14 +2341,14 @@ function App() {
                   {activeTabInModal === 'notes' || activePlayer.channel.platform !== 'youtube' ? (
                     <>
                       <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '12px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px', color: 'var(--text-white)' }}>
-                        Qoraalada Muuqaalka (Notes)
+                        {t('notesTitle')}
                       </h4>
 
                       {/* Notes List */}
                       <div className="notes-list-container">
                         {notes.length === 0 ? (
                           <div style={{ textAlign: 'center', color: 'var(--text-dimmed)', padding: '40px 20px', fontSize: '0.85rem' }}>
-                            Weli wax qoraal ah lagama qorin muuqaalkan.
+                            {t('emptyNotes')}
                           </div>
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -2391,7 +2413,7 @@ function App() {
                           <div className="note-input-wrapper">
                             <textarea 
                               className="sidebar-textarea" 
-                              placeholder="Qor note..."
+                              placeholder={t('writeNotePlaceholder')}
                               value={newNoteText}
                               onChange={(e) => {
                                 setNewNoteText(e.target.value);
@@ -2416,18 +2438,18 @@ function App() {
                   ) : (
                     <>
                       <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '12px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px', color: 'var(--text-white)' }}>
-                        Muuqaalada dhowaan la soo dhigay (Playlist)
+                        {t('playlistTitle')}
                       </h4>
 
                       {/* Video Playlist */}
                       <div className="notes-list-container">
                         {isLoadingVideos ? (
                           <div style={{ textAlign: 'center', color: 'var(--text-dimmed)', padding: '40px 20px', fontSize: '0.85rem' }}>
-                            Soo dejinaya liiska...
+                            {t('loadingPlaylist')}
                           </div>
                         ) : channelVideos.length === 0 ? (
                           <div style={{ textAlign: 'center', color: 'var(--text-dimmed)', padding: '40px 20px', fontSize: '0.85rem' }}>
-                            Muuqaalo lama helin.
+                            {t('noVideosFound')}
                           </div>
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
