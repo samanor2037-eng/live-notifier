@@ -2176,9 +2176,9 @@ function App() {
                             <h4 className="grid-video-title" title={video.title}>
                               {video.title}
                             </h4>
-                            {video.published_at && (
+                            {video.published && (
                               <span className="grid-video-date">
-                                {new Date(video.published_at).toLocaleDateString(language === 'so' ? 'so-SO' : 'en-US', {
+                                {new Date(video.published).toLocaleDateString(language === 'so' ? 'so-SO' : 'en-US', {
                                   year: 'numeric',
                                   month: 'short',
                                   day: 'numeric'
