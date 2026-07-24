@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { 
-  Bell, BellOff, Settings, Users, Radio, Video, Plus, Trash2, 
+import {
+  Bell, BellOff, Settings, Users, Video, Plus, Trash2,
   Mail, Shield, RefreshCw, AlertCircle, Youtube, CheckCircle2, Play,
-  Eye, EyeOff, ListVideo, GripVertical, Maximize, Minimize
+  Eye, EyeOff, ListVideo, GripVertical, Maximize, Minimize,
+  Sun, Moon, LogOut, User, ChevronDown, Music2, Volume2, VolumeX
 } from 'lucide-react';
 
 // Permissions delegated to TikTok embed iframes (set directly in JSX so they
@@ -49,27 +50,135 @@ function playChime() {
 }
 
 // Globally cache Supabase client to avoid creating multiple GoTrueClient instances on HMR/re-mounts
-let cachedSupabase = null;
+let cachedSupabase = typeof window !== 'undefined' ? (window.__supabaseClient || null) : null;
 
 // Backend API base URL: set VITE_API_URL in production (e.g. Vercel env vars)
 // to point at the deployed backend; falls back to localhost for local dev.
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
+// UI translations (Somali default, English secondary). Covers the app shell,
+// auth screens, dashboard, add-channel flow, profile, and toast messages.
+// The Settings tab's SMTP/Google-Apps-Script setup guide and the video
+// player/notes modal remain Somali-only for now.
+const translations = {
+  appTagline: { so: 'La soco marka dadka aad rabto ay Live galaan ama muuqaal cusub soo dhigaan.', en: 'Get notified the moment people you follow go live or post a new video.' },
+  emailLabel: { so: 'Email-ka', en: 'Email' },
+  passwordLabel: { so: 'Password-ka', en: 'Password' },
+  forgotPassword: { so: 'Ma illowday password-ka?', en: 'Forgot password?' },
+  loginBtn: { so: 'Soo Gal', en: 'Log In' },
+  signupBtn: { so: 'Abuur Akoonka', en: 'Create Account' },
+  sendResetLink: { so: 'Dir Link Dib-u-dejin', en: 'Send Reset Link' },
+  pleaseWait: { so: 'Fadlan sug...', en: 'Please wait...' },
+  noAccount: { so: 'Miyaanad lahayn akoon?', en: "Don't have an account?" },
+  signUpHere: { so: 'Halkan ka abuur (Sign Up)', en: 'Sign up here' },
+  haveAccount: { so: 'Horey ma u lahayd akoon?', en: 'Already have an account?' },
+  loginHere: { so: 'Halkan ka soo gal (Log In)', en: 'Log in here' },
+  backToLogin: { so: '← Ku noqo Login-ka', en: '← Back to Login' },
+  orDivider: { so: 'AMA', en: 'OR' },
+  googleSignIn: { so: 'Geli Akoonka Google (Sign In)', en: 'Sign in with Google' },
+  googleNote: { so: '* Xusuusin: Google Sign-in wuxuu u baahan yahay in laga shido Supabase Dashboard-kaaga.', en: '* Note: Google Sign-in must be enabled in your Supabase Dashboard.' },
+  resetPasswordTitle: { so: 'Beddel Password-ka', en: 'Reset Password' },
+  resetPasswordSubtitle: { so: 'Geli password-kaaga cusub.', en: 'Enter your new password.' },
+  newPasswordLabel: { so: 'Password Cusub', en: 'New Password' },
+  savePassword: { so: 'Kaydi Password-ka Cusub', en: 'Save New Password' },
+
+  appSubtitle: { so: 'La soco marka qof aad rabto uu Live galo ama muuqaal cusub soo dhigo YouTube & TikTok', en: 'Track when someone you follow goes live or uploads on YouTube & TikTok' },
+  checkNow: { so: 'Hubi Hadda', en: 'Check Now' },
+  soundLabel: { so: 'Dhawaaq', en: 'Sound' },
+  pushAlert: { so: 'Push Alert', en: 'Push Alert' },
+  loggedInAs: { so: 'Wuxuu u furan yahay:', en: 'Signed in as:' },
+  logOut: { so: 'Ka Bax (Log Out)', en: 'Log Out' },
+
+  tabDashboard: { so: 'Dashboard', en: 'Dashboard' },
+  tabAddChannel: { so: 'Ku dar Kanaal', en: 'Add Channel' },
+  tabSettings: { so: 'Settings', en: 'Settings' },
+
+  noChannelsTitle: { so: 'Weli ma jiraan kanaalo aad la socoto', en: 'No channels being tracked yet' },
+  noChannelsSub: { so: 'Guji "Ku dar Kanaal" si aad u bilowdo', en: 'Click "Add Channel" to get started' },
+  lastChecked: { so: 'Check-gii Ugu Dambeeyay', en: 'Last Checked' },
+  neverChecked: { so: 'Weli lama hubin', en: 'Not checked yet' },
+  lastVideo: { so: 'Muuqaalkii Ugu Dambeeyay', en: 'Latest Video' },
+  viewVideo: { so: 'Booqo Muuqaalka', en: 'View Video' },
+  watchLive: { so: 'Daawo Live-ka', en: 'Watch Live' },
+  watchVideos: { so: 'Daawo Muuqaalada', en: 'Watch Videos' },
+  deleteBtn: { so: 'Tirtir', en: 'Delete' },
+  statusLive: { so: 'LIVE', en: 'LIVE' },
+  statusOffline: { so: 'OFFLINE', en: 'OFFLINE' },
+
+  addChannelTitle: { so: 'Ku dar Kanaal Cusub', en: 'Add New Channel' },
+  addByUrl: { so: 'Ku dar Link (URL)', en: 'Add by Link (URL)' },
+  addManual: { so: 'Ku dar Gacanta (Manual)', en: 'Add Manually' },
+  channelUrlLabel: { so: 'Geli Link-ga Kanaalka (Channel URL)', en: 'Enter Channel URL' },
+  checkingLink: { so: 'Hubinaya...', en: 'Checking...' },
+  checkLink: { so: 'Hubi Link-ga', en: 'Check Link' },
+  urlSupportNote: { so: '* Waxaa la taageerayaa link-yada YouTube-ka (Channel ama Handle) iyo TikTok profiles.', en: '* YouTube channel/handle links and TikTok profiles are supported.' },
+  adding: { so: 'Lagu darayaa...', en: 'Adding...' },
+  addChannelBtn: { so: 'Ku Dar Kanaalka', en: 'Add Channel' },
+  platformLabel: { so: 'Bar-bulsho (Platform)', en: 'Platform' },
+  identifierLabel: { so: 'Identifer (YouTube Channel ID / TikTok Username)', en: 'Identifier (YouTube Channel ID / TikTok Username)' },
+  youtubeIdNote: { so: "* Fiiro gaar ah: YouTube u isticmaal Channel ID-ga rasmiga ah (ka bilaabma UC...) ee ha isticmaalin handle-ka (@name).", en: "* Note: Use YouTube's official Channel ID (starts with UC...), not the @handle." },
+  displayNameLabel: { so: 'Magaca Qofka (Display Name)', en: 'Display Name' },
+  displayNamePlaceholder: { so: 'Geli magaca aad u bixinayso', en: 'Enter a name for this channel' },
+  addBtn: { so: 'Ku Dar', en: 'Add' },
+
+  profileTitle: { so: 'Profile', en: 'Profile' },
+  themeLabel: { so: 'Mowduuca', en: 'Theme' },
+  darkMode: { so: 'Mugdi', en: 'Dark' },
+  lightMode: { so: 'Iftiin', en: 'Light' },
+  languageLabel: { so: 'Luqadda', en: 'Language' },
+  fullSettings: { so: 'Settings-ka Buuxa', en: 'Full Settings' },
+
+  toastFetchChannelsFail: { so: 'Fashil: Ka soo kicinta kanaalada', en: 'Failed to load channels' },
+  toastNoNotifSupport: { so: 'Cabsida: Browser-kaan ma taageero notifications', en: 'Sorry: this browser does not support notifications' },
+  toastNotifEnabled: { so: 'Ogeysiisyada browser-ka waa la shiday!', en: 'Browser notifications enabled!' },
+  toastNotifDenied: { so: 'Ogeysiisyada waa la diiday.', en: 'Notifications were denied.' },
+  toastFillEmailPassword: { so: 'Fadlan geli email-ka iyo password-ka', en: 'Please enter your email and password' },
+  toastLoginSuccess: { so: 'Waa laguugu guuleystay soo galidda!', en: 'Logged in successfully!' },
+  toastSignupSuccess: { so: 'Waa laguugu guuleystay is-diiwaan-gelinta! Fadlan hubi email-kaaga.', en: 'Signed up successfully! Please check your email.' },
+  toastEnterEmail: { so: 'Fadlan geli email-kaaga', en: 'Please enter your email' },
+  toastResetLinkSent: { so: 'Link dib-u-dejinta password-ka ayaa loo diray email-kaaga!', en: 'A password reset link has been sent to your email!' },
+  toastPasswordTooShort: { so: 'Password-ku waa inuu ka koobnaadaa ugu yaraan 6 xaraf', en: 'Password must be at least 6 characters' },
+  toastPasswordChanged: { so: 'Password-kaaga waa la beddelay!', en: 'Your password has been changed!' },
+  toastLoggedOut: { so: 'Waa laguu saaray akoonka (Logged Out).', en: 'You have been logged out.' },
+  toastEnterChannelUrl: { so: 'Fadlan geli link-ga kanaalka (URL)', en: 'Please enter the channel URL' },
+  toastDataFound: { so: 'Xogta waa la soo helay!', en: 'Data found!' },
+  toastCouldNotFetchData: { so: 'Ma awoodo inaan soo qabto xogta', en: 'Could not fetch the data' },
+  toastServerDown: { so: 'Server-ka (Port 5001) ma shaqaynayo', en: 'The server (Port 5001) is not responding' },
+  toastCheckUrlFirst: { so: 'Fadlan marka hore hubi oo soo qabo xogta', en: 'Please check the link first to fetch the data' },
+  toastFillAllFields: { so: 'Fadlan buuxi dhammaan meelaha banaan', en: 'Please fill in all fields' },
+  toastChannelAdded: { so: 'Kanaalka waa la daray. Hubinta heerka ayaa bilaabatay...', en: 'Channel added. Checking its status now...' },
+  toastAddChannelFail: { so: 'Fashil intii lagu jiray ku darista kanaalka', en: 'Failed to add the channel' },
+  toastChannelDeleted: { so: 'Kanaalka waa la tirtiray.', en: 'Channel deleted.' },
+  toastDeleteChannelFail: { so: 'Fashil: Tirtirista kanaalka', en: 'Failed to delete the channel' },
+  toastNoteSaved: { so: 'Qoraalkii note-ka waa la kaydiyay!', en: 'Note saved!' },
+  toastNoteSaveFail: { so: 'Cillad intii lagu jiray kaydinta note-ka', en: 'Failed to save the note' },
+  toastNoteDeleted: { so: 'Note-kii waa la tirtiray.', en: 'Note deleted.' },
+  toastNoteDeleteFail: { so: 'Cillad intii lagu jiray tirtirista note-ka', en: 'Failed to delete the note' },
+  toastBackToLiveEdge: { so: 'Waxaad ku laabatay halka live-ku hadda marayo!', en: "You're back at the live edge!" },
+  toastPlayerNotReady: { so: 'Player-ku weli ma diyaarsana ama ma taageerayo live seek-ga', en: 'The player is not ready yet or does not support live seeking' },
+  toastSettingsSaved: { so: 'Settings-ka waa la kaydiyay!', en: 'Settings saved!' },
+  toastSettingsSaveFail: { so: 'Fashil: Kaydinta settings-ka', en: 'Failed to save settings' },
+  toastCheckStarted: { so: 'Hubinta hadda waa la bilaabay!', en: 'Check started!' },
+  toastServerUnreachable: { so: 'Ma awoodo inaan la xiriiro Server-ka (Port 5001)', en: 'Could not reach the server (Port 5001)' },
+  toastTestEmailSent: { so: 'Email tijaabo ah ayaa laguu soo diray!', en: 'A test email has been sent to you!' },
+  toastInvalidTikTokLink: { so: 'Link-ga TikTok ma ahan mid sax ah', en: 'That TikTok link is not valid' },
+  toastErrorPrefix: { so: 'Cillad', en: 'Error' },
+  toastLiveNow: { so: 'hadda waa LIVE!', en: 'is now LIVE!' },
+  noVideoYet: { so: 'Weli lama helin', en: 'None yet' },
+  welcomeBack: { so: 'Soo dhawoow', en: 'Welcome back' },
+  welcomeSubtitle: { so: 'Waa kan cusbooneysiinta ugu dambeysay ee kanaaladaada', en: "Here's the latest update from your channels" },
+  freePlan: { so: 'Qorshaha Bilaashka', en: 'Free Plan' },
+};
+
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [supabase, setSupabase] = useState(null);
-  const [channels, setChannels] = useState([]);
-  const [smtp, setSmtp] = useState({
-    provider: 'smtp',
-    host: '',
-    port: '587',
-    user: '',
-    pass: '',
-    bird_api_key: '',
-    bird_from: 'onboarding@messagebird.dev',
-    gas_url: '',
-    to_email: ''
-  });
+  const [channels, setChannels] = useState([
+    { id: '1', platform: 'youtube', identifier: 'UC7xpeYGGwMo_h3rXmRLfZyg', name: 'Ninjagaming', is_live: false, last_checked: new Date().toISOString(), last_video_url: 'https://youtube.com/watch?v=abc', avatar_url: null },
+    { id: '2', platform: 'youtube', identifier: 'UCL0u5uz7KZ9q-pe-VC8TY-w', name: 'Candace Owens', is_live: false, last_checked: new Date().toISOString(), last_video_url: 'https://youtube.com/watch?v=abc', avatar_url: null },
+    { id: '3', platform: 'tiktok', identifier: 'teammk3021', name: 'MrKHAN x DADDY302', is_live: false, last_checked: new Date().toISOString(), last_video_url: null, avatar_url: null },
+  ]);
+  const [isEmailConfigured, setIsEmailConfigured] = useState(false);
   
   // Form fields
   const [newChannel, setNewChannel] = useState({
@@ -83,15 +192,35 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [isConfigured, setIsConfigured] = useState(false);
-  
+  const [theme, setTheme] = useState(() => {
+    if (typeof document !== 'undefined') {
+      const attr = document.documentElement.getAttribute('data-theme');
+      if (attr) return attr;
+    }
+    return 'dark';
+  });
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef(null);
+  const [language, setLanguage] = useState(() => {
+    try {
+      return localStorage.getItem('veonotes-lang') || 'en';
+    } catch (e) {
+      return 'en';
+    }
+  });
+  const t = (key) => (translations[key] ? (translations[key][language] || translations[key].so) : key);
+
   // Track previous live states to trigger notifications on transition
   const prevLiveStatesRef = useRef({});
 
   const [session, setSession] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
-  
+  const [authMode, setAuthMode] = useState('login'); // 'login', 'signup', or 'forgot'
+  const [isSendingReset, setIsSendingReset] = useState(false);
+  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+  const [newRecoveryPassword, setNewRecoveryPassword] = useState('');
+
   // URL resolving states
   const [channelUrl, setChannelUrl] = useState('');
   const [resolvedChannel, setResolvedChannel] = useState(null);
@@ -174,18 +303,26 @@ function App() {
   useEffect(() => {
     if (!activePlayer || activePlayer.type !== 'live' || !isTrackingLive) return;
 
-    // Initialize baseline if player is already playing
-    if (ytPlayerRef.current && typeof ytPlayerRef.current.getCurrentTime === 'function') {
-      const curTime = ytPlayerRef.current.getCurrentTime();
-      lastPlayTimeRef.current = {
-        playerTime: curTime,
-        wallTime: Date.now()
-      };
-      lastPlayerTimeRef.current = curTime;
-    } else {
-      lastPlayTimeRef.current = { playerTime: 0, wallTime: Date.now() };
-      lastPlayerTimeRef.current = 0;
-    }
+    const initBaseline = () => {
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.getCurrentTime === 'function') {
+        const curTime = ytPlayerRef.current.getCurrentTime();
+        lastPlayTimeRef.current = {
+          playerTime: curTime,
+          wallTime: Date.now()
+        };
+        lastPlayerTimeRef.current = curTime;
+      } else {
+        lastPlayTimeRef.current = { playerTime: 0, wallTime: Date.now() };
+        lastPlayerTimeRef.current = 0;
+      }
+    };
+
+    // Delay the baseline capture so an in-flight seekTo (e.g. from
+    // goBackToLiveEdge, triggered the instant isTrackingLive flips true) has
+    // time to land first. Baselining immediately would capture the stale
+    // pre-seek time, making the next tick misread the seek's own jump as a
+    // manual seek and disengage tracking right away.
+    const initTimer = setTimeout(initBaseline, 800);
 
     const interval = setInterval(() => {
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getCurrentTime === 'function') {
@@ -233,10 +370,13 @@ function App() {
       }
     }, 3000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initTimer);
+      clearInterval(interval);
+    };
   }, [activePlayer, isTrackingLive]);
 
-  // Initialize Supabase Client dynamically from backend config
+  // Initialize Supabase Client dynamically from backend config and check email config
   useEffect(() => {
     const loadConfig = async () => {
       try {
@@ -247,6 +387,9 @@ function App() {
             cachedSupabase = createClient(data.supabaseUrl, data.supabaseKey);
             cachedSupabase.supabaseUrl = data.supabaseUrl;
             cachedSupabase.supabaseKey = data.supabaseKey;
+            if (typeof window !== 'undefined') {
+              window.__supabaseClient = cachedSupabase;
+            }
           }
           setSupabase(cachedSupabase);
           setIsConfigured(true);
@@ -260,13 +403,27 @@ function App() {
         setIsConfigured(false);
       }
     };
+
+    const checkHealth = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/health`);
+        const data = await res.json();
+        if (data.status === 'ok') {
+          setIsEmailConfigured(!!data.emailConfigured);
+        }
+      } catch (err) {
+        console.error("Failed to fetch backend health status:", err);
+      }
+    };
+
     loadConfig();
-  }, []);
+    checkHealth();
+  }, [activeTab]);
 
   // Monitor session and Google Sign-in state
   useEffect(() => {
     if (!supabase) return;
-    
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -279,6 +436,9 @@ function App() {
     // Listen to changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (_event === 'PASSWORD_RECOVERY') {
+        setIsRecoveryMode(true);
+      }
       // Strip token details from URL hash if they exist
       if (session && window.location.hash && (window.location.hash.includes('access_token=') || window.location.hash.includes('refresh_token='))) {
         window.history.replaceState(null, null, window.location.pathname + window.location.search);
@@ -288,12 +448,11 @@ function App() {
     return () => subscription.unsubscribe();
   }, [supabase]);
 
-  // Load channels and SMTP settings when session is active
+  // Load channels when session is active
   useEffect(() => {
     if (!supabase || !session) return;
     
     fetchChannels();
-    fetchSettings();
 
     // Trigger an immediate live-status check on load so the dashboard
     // reflects current status right away, without needing "Hubi Hadda".
@@ -326,7 +485,7 @@ function App() {
                   icon: '/favicon.ico'
                 });
               }
-              showToast(`${updatedChannel.name} is now LIVE!`);
+              showToast(`${updatedChannel.name} ${t('toastLiveNow')}`);
             }
             
             setChannels(prev => prev.map(ch => ch.id === updatedChannel.id ? updatedChannel : ch));
@@ -353,6 +512,38 @@ function App() {
       setNotificationsEnabled(true);
     }
   }, []);
+
+  // Apply theme choice to the document and persist it
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    try {
+      localStorage.setItem('veonotes-theme', theme);
+    } catch (e) {}
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
+  const changeLanguage = (lang) => {
+    setLanguage(lang);
+    try {
+      localStorage.setItem('veonotes-lang', lang);
+    } catch (e) {}
+  };
+
+  // Close the profile dropdown when clicking outside of it
+  useEffect(() => {
+    if (!showProfileMenu) return;
+    const handleClickOutside = (e) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target)) {
+        setShowProfileMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showProfileMenu]);
+
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
@@ -376,38 +567,28 @@ function App() {
       });
       prevLiveStatesRef.current = states;
     } catch (err) {
-      showToast('Fashil: Ka soo kicinta kanaalada', 'error');
+      showToast(t('toastFetchChannelsFail'), 'error');
     }
   };
 
-  const fetchSettings = async () => {
-    try {
-      const { data, error } = await supabase.from('settings').select('*').eq('key', 'smtp_config');
-      if (error) throw error;
-      if (data && data.length > 0 && data[0].value) {
-        setSmtp(data[0].value);
-      }
-    } catch (err) {
-      console.error('Error fetching settings:', err);
-    }
-  };
+  // Settings loading removed as email alerts are configured in backend environment
 
   const requestNotificationPermission = async () => {
     if (!('Notification' in window)) {
-      showToast('Cabsida: Browser-kaan ma taageero notifications', 'error');
+      showToast(t('toastNoNotifSupport'), 'error');
       return;
     }
     
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
       setNotificationsEnabled(true);
-      showToast('Ogeysiisyada browser-ka waa la shiday!');
-      new Notification("Social Live Notifier", {
+      showToast(t('toastNotifEnabled'));
+      new Notification("Veonotes", {
         body: "Ogeysiisyada waa lagu guuleystay!"
       });
     } else {
       setNotificationsEnabled(false);
-      showToast('Ogeysiisyada waa la diiday.', 'error');
+      showToast(t('toastNotifDenied'), 'error');
     }
   };
 
@@ -421,14 +602,14 @@ function App() {
       });
       if (error) throw error;
     } catch (err) {
-      showToast(`Login failed: ${err.message}`, 'error');
+      showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
     }
   };
 
   const handleEmailAuth = async (e) => {
     e.preventDefault();
     if (!email || !password) {
-      showToast('Fadlan geli email-ka iyo password-ka', 'error');
+      showToast(t('toastFillEmailPassword'), 'error');
       return;
     }
     setIsLoading(true);
@@ -439,17 +620,59 @@ function App() {
           password: password,
         });
         if (error) throw error;
-        showToast('Waa laguugu guuleystay soo galidda!');
+        showToast(t('toastLoginSuccess'));
       } else {
         const { error } = await supabase.auth.signUp({
           email: email.trim(),
           password: password,
         });
         if (error) throw error;
-        showToast('Waa laguugu guuleystay is-diiwaan-gelinta! Fadlan hubi email-kaaga.');
+        showToast(t('toastSignupSuccess'));
       }
     } catch (err) {
-      showToast(`Cillad: ${err.message}`, 'error');
+      showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    if (!email) {
+      showToast(t('toastEnterEmail'), 'error');
+      return;
+    }
+    setIsSendingReset(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: window.location.origin
+      });
+      if (error) throw error;
+      showToast(t('toastResetLinkSent'));
+      setAuthMode('login');
+    } catch (err) {
+      showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
+
+  const handleUpdateRecoveryPassword = async (e) => {
+    e.preventDefault();
+    if (!newRecoveryPassword || newRecoveryPassword.length < 6) {
+      showToast(t('toastPasswordTooShort'), 'error');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newRecoveryPassword });
+      if (error) throw error;
+      showToast(t('toastPasswordChanged'));
+      setIsRecoveryMode(false);
+      setNewRecoveryPassword('');
+      window.history.replaceState(null, null, window.location.pathname + window.location.search);
+    } catch (err) {
+      showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -457,13 +680,13 @@ function App() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    showToast('Waa laguu saaray akoonka (Logged Out).');
+    showToast(t('toastLoggedOut'));
   };
 
   const handleResolveUrl = async (e) => {
     e.preventDefault();
     if (!channelUrl) {
-      showToast('Fadlan geli link-ga kanaalka (URL)', 'error');
+      showToast(t('toastEnterChannelUrl'), 'error');
       return;
     }
     
@@ -479,12 +702,12 @@ function App() {
       const data = await res.json();
       if (data.success) {
         setResolvedChannel(data.channel);
-        showToast('Xogta waa la soo helay!');
+        showToast(t('toastDataFound'));
       } else {
-        showToast(`Cillad: ${data.error || 'Ma awoodo inaan soo qabto xogta'}`, 'error');
+        showToast(`${t('toastErrorPrefix')}: ${data.error || t('toastCouldNotFetchData')}`, 'error');
       }
     } catch (err) {
-      showToast('Server-ka (Port 5001) ma shaqaynayo', 'error');
+      showToast(t('toastServerDown'), 'error');
     } finally {
       setIsResolving(false);
     }
@@ -497,7 +720,7 @@ function App() {
     
     if (addMode === 'url') {
       if (!resolvedChannel) {
-        showToast('Fadlan marka hore hubi oo soo qabo xogta', 'error');
+        showToast(t('toastCheckUrlFirst'), 'error');
         return;
       }
       platform = resolvedChannel.platform;
@@ -506,7 +729,7 @@ function App() {
       avatarUrl = resolvedChannel.avatar;
     } else {
       if (!newChannel.identifier || !newChannel.name) {
-        showToast('Fadlan buuxi dhammaan meelaha banaan', 'error');
+        showToast(t('toastFillAllFields'), 'error');
         return;
       }
       platform = newChannel.platform;
@@ -532,7 +755,7 @@ function App() {
       
       if (error) throw error;
       
-      showToast('Kanaalka waa la daray. Hubinta heerka ayaa bilaabatay...');
+      showToast(t('toastChannelAdded'));
       setNewChannel({ platform: 'youtube', identifier: '', name: '' });
       setChannelUrl('');
       setResolvedChannel(null);
@@ -543,7 +766,7 @@ function App() {
         .then(() => fetchChannels())
         .catch(err => console.error("Failed to trigger auto check:", err));
     } catch (err) {
-      showToast('Fashil intii lagu jiray ku darista kanaalka', 'error');
+      showToast(t('toastAddChannelFail'), 'error');
     } finally {
       setIsLoading(false);
     }
@@ -553,10 +776,10 @@ function App() {
     try {
       const { error } = await supabase.from('channels').delete().eq('id', id);
       if (error) throw error;
-      showToast('Kanaalka waa la tirtiray.');
+      showToast(t('toastChannelDeleted'));
       fetchChannels();
     } catch (err) {
-      showToast('Fashil: Tirtirista kanaalka', 'error');
+      showToast(t('toastDeleteChannelFail'), 'error');
     }
   };
 
@@ -623,9 +846,9 @@ function App() {
         el.style.height = el.classList.contains('overlay-textarea') ? '36px' : '40px';
       });
       fetchNotes(activePlayer.channel.id, activePlayer.videoId);
-      showToast('Qoraalkii note-ka waa la kaydiyay!');
+      showToast(t('toastNoteSaved'));
     } catch (err) {
-      showToast('Cillad intii lagu jiray kaydinta note-ka', 'error');
+      showToast(t('toastNoteSaveFail'), 'error');
     }
   };
 
@@ -637,9 +860,9 @@ function App() {
       if (activePlayer) {
         fetchNotes(activePlayer.channel.id, activePlayer.videoId);
       }
-      showToast('Note-kii waa la tirtiray.');
+      showToast(t('toastNoteDeleted'));
     } catch (err) {
-      showToast('Cillad intii lagu jiray tirtirista note-ka', 'error');
+      showToast(t('toastNoteDeleteFail'), 'error');
     }
   };
 
@@ -746,12 +969,12 @@ function App() {
         if (typeof ytPlayerRef.current.playVideo === 'function') {
           ytPlayerRef.current.playVideo();
         }
-        showToast('Waxaad ku laabatay halka live-ku hadda marayo!');
+        showToast(t('toastBackToLiveEdge'));
       } catch (err) {
         console.error("Failed to seek to live edge:", err);
       }
     } else {
-      showToast('Player-ku weli ma diyaarsana ama ma taageerayo live seek-ga', 'warning');
+      showToast(t('toastPlayerNotReady'), 'warning');
     }
   };
 
@@ -950,94 +1173,123 @@ function App() {
     }
   }, [activePlayer, isYtApiReady]);
 
-  const handleSaveSMTP = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    try {
-      const { error } = await supabase.from('settings').upsert({
-        key: 'smtp_config',
-        value: {
-          ...smtp,
-          to_email: session?.user?.email
-        }
-      });
-      
-      if (error) throw error;
-      showToast('Settings-ka waa la kaydiyay!');
-    } catch (err) {
-      showToast('Fashil: Kaydinta settings-ka', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const triggerManualCheck = async () => {
     setIsLoading(true);
     try {
       // Connect to the local backend port 5001
       const res = await fetch(`${API_URL}/api/check`, { method: 'POST' });
       if (!res.ok) throw new Error();
-      showToast('Hubinta hadda waa la bilaabay!');
+      showToast(t('toastCheckStarted'));
       fetchChannels();
     } catch (err) {
-      showToast('Ma awoodo inaan la xiriiro Server-ka (Port 5001)', 'error');
+      showToast(t('toastServerUnreachable'), 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   const sendTestEmail = async () => {
+    if (!session?.user?.email) {
+      showToast(t('toastEnterEmail'), 'error');
+      return;
+    }
     setIsLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/send-test-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          smtp_config: {
-            ...smtp,
-            to_email: session?.user?.email
-          } 
+          to_email: session.user.email
         })
       });
       const data = await res.json();
       if (data.success) {
-        showToast('Email tijaabo ah ayaa laguu soo diray!');
+        showToast(t('toastTestEmailSent'));
       } else {
-        showToast(`Cillad: ${data.error}`, 'error');
+        showToast(`${t('toastErrorPrefix')}: ${data.error}`, 'error');
       }
     } catch (err) {
-      showToast('Server-ka (Port 5001) ma shaqaynayo', 'error');
+      showToast(t('toastServerDown'), 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (!session) {
+  const authLangSwitcher = (
+    <div className="lang-switch" style={{ position: 'absolute', top: '20px', right: '20px' }}>
+      <button type="button" className={language === 'so' ? 'active' : ''} onClick={() => changeLanguage('so')}>SO</button>
+      <button type="button" className={language === 'en' ? 'active' : ''} onClick={() => changeLanguage('en')}>EN</button>
+    </div>
+  );
+
+  if (isRecoveryMode) {
     return (
-      <div className="app-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '20px' }}>
-        {/* Toast Notification */}
+      <div className="app-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '20px', position: 'relative' }}>
+        {authLangSwitcher}
         {toast && (
           <div className={`toast ${toast.type === 'error' ? 'border-red-500' : 'border-blue-500'}`}>
-            {toast.type === 'error' ? <AlertCircle color="#ff3b30" /> : <CheckCircle2 color="#007aff" />}
+            {toast.type === 'error' ? <AlertCircle color="#ff3b30" /> : <CheckCircle2 color="#5E17F5" />}
             <span>{toast.message}</span>
           </div>
         )}
-        
         <div className="glass-card" style={{ maxWidth: '420px', width: '100%', padding: '40px 30px' }}>
           <div className="text-center" style={{ marginBottom: '30px' }}>
-            <Radio className="mx-auto mb-4 animate-pulse" color="#ff3b30" size={64} style={{ margin: '0 auto 15px auto' }} />
-            <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '10px' }}>Social Live Notifier</h1>
+            <Shield className="mx-auto mb-4" color="#5E17F5" size={56} style={{ margin: '0 auto 15px auto' }} />
+            <h1 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '10px' }}>{t('resetPasswordTitle')}</h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5' }}>
-              La soco marka dadka aad rabto ay Live galaan ama muuqaal cusub soo dhigaan.
+              {t('resetPasswordSubtitle')}
+            </p>
+          </div>
+          <form onSubmit={handleUpdateRecoveryPassword}>
+            <div className="form-group" style={{ marginBottom: '20px' }}>
+              <label>{t('newPasswordLabel')}</label>
+              <input
+                type="password"
+                className="input-field"
+                placeholder="••••••••"
+                value={newRecoveryPassword}
+                onChange={(e) => setNewRecoveryPassword(e.target.value)}
+                required
+                minLength={6}
+                style={{ marginBottom: '4px' }}
+              />
+            </div>
+            <button type="submit" className="btn btn-primary w-full" disabled={isLoading} style={{ width: '100%', padding: '14px', borderRadius: '8px', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              {isLoading ? t('pleaseWait') : t('savePassword')}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="app-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '20px', position: 'relative' }}>
+        {authLangSwitcher}
+        {/* Toast Notification */}
+        {toast && (
+          <div className={`toast ${toast.type === 'error' ? 'border-red-500' : 'border-blue-500'}`}>
+            {toast.type === 'error' ? <AlertCircle color="#ff3b30" /> : <CheckCircle2 color="#5E17F5" />}
+            <span>{toast.message}</span>
+          </div>
+        )}
+
+        <div className="glass-card" style={{ maxWidth: '420px', width: '100%', padding: '40px 30px' }}>
+          <div className="text-center" style={{ marginBottom: '30px' }}>
+            <img src="/veonotes-icon-256.png" alt="Veonotes" style={{ width: '72px', height: '72px', margin: '0 auto 15px auto', display: 'block' }} />
+            <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '10px' }}>Veonotes</h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5' }}>
+              {t('appTagline')}
             </p>
           </div>
 
-          <form onSubmit={handleEmailAuth} style={{ marginBottom: '24px' }}>
-            <div className="form-group" style={{ marginBottom: '16px' }}>
-              <label>Email-ka</label>
-              <input 
-                type="email" 
-                className="input-field" 
+          <form onSubmit={authMode === 'forgot' ? handleForgotPassword : handleEmailAuth} style={{ marginBottom: '24px' }}>
+            <div className="form-group" style={{ marginBottom: authMode === 'forgot' ? '20px' : '16px' }}>
+              <label>{t('emailLabel')}</label>
+              <input
+                type="email"
+                className="input-field"
                 placeholder="email@tusaale.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -1045,136 +1297,229 @@ function App() {
                 style={{ marginBottom: '4px' }}
               />
             </div>
-            <div className="form-group" style={{ marginBottom: '20px' }}>
-              <label>Password-ka</label>
-              <input 
-                type="password" 
-                className="input-field" 
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                style={{ marginBottom: '4px' }}
-              />
-            </div>
+            {authMode !== 'forgot' && (
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label>{t('passwordLabel')}</label>
+                <input
+                  type="password"
+                  className="input-field"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  style={{ marginBottom: '4px' }}
+                />
+              </div>
+            )}
 
-            <button type="submit" className="btn btn-primary w-full" disabled={isLoading} style={{ width: '100%', padding: '14px', borderRadius: '8px', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              {isLoading ? 'Fadlan sug...' : authMode === 'login' ? 'Soo Gal' : 'Abuur Akoonka'}
+            {authMode === 'login' && (
+              <div className="text-right" style={{ marginBottom: '16px', fontSize: '0.85rem' }}>
+                <button type="button" onClick={() => setAuthMode('forgot')} style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', cursor: 'pointer', textDecoration: 'underline' }}>
+                  {t('forgotPassword')}
+                </button>
+              </div>
+            )}
+
+            <button type="submit" className="btn btn-primary w-full" disabled={isLoading || isSendingReset} style={{ width: '100%', padding: '14px', borderRadius: '8px', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              {authMode === 'forgot'
+                ? (isSendingReset ? t('pleaseWait') : t('sendResetLink'))
+                : (isLoading ? t('pleaseWait') : authMode === 'login' ? t('loginBtn') : t('signupBtn'))}
             </button>
           </form>
 
           <div className="text-center" style={{ marginBottom: '24px', fontSize: '0.85rem' }}>
-            {authMode === 'login' ? (
+            {authMode === 'login' && (
               <p style={{ color: 'var(--text-muted)' }}>
-                Miyaanad lahayn akoon?{' '}
-                <button type="button" onClick={() => setAuthMode('signup')} style={{ background: 'none', border: 'none', color: 'var(--accent-blue)', cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}>
-                  Halkan ka abuur (Sign Up)
+                {t('noAccount')}{' '}
+                <button type="button" onClick={() => setAuthMode('signup')} style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}>
+                  {t('signUpHere')}
                 </button>
               </p>
-            ) : (
+            )}
+            {authMode === 'signup' && (
               <p style={{ color: 'var(--text-muted)' }}>
-                Horey ma u lahayd akoon?{' '}
-                <button type="button" onClick={() => setAuthMode('login')} style={{ background: 'none', border: 'none', color: 'var(--accent-blue)', cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}>
-                  Halkan ka soo gal (Log In)
+                {t('haveAccount')}{' '}
+                <button type="button" onClick={() => setAuthMode('login')} style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}>
+                  {t('loginHere')}
+                </button>
+              </p>
+            )}
+            {authMode === 'forgot' && (
+              <p style={{ color: 'var(--text-muted)' }}>
+                <button type="button" onClick={() => setAuthMode('login')} style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}>
+                  {t('backToLogin')}
                 </button>
               </p>
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', color: 'var(--text-dimmed)', fontSize: '0.8rem' }}>
-            <div style={{ flex: 1, height: '1px', background: 'var(--card-border)' }}></div>
-            <span style={{ padding: '0 10px' }}>AMA</span>
-            <div style={{ flex: 1, height: '1px', background: 'var(--card-border)' }}></div>
-          </div>
+          {authMode !== 'forgot' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', color: 'var(--text-dimmed)', fontSize: '0.8rem' }}>
+                <div style={{ flex: 1, height: '1px', background: 'var(--card-border)' }}></div>
+                <span style={{ padding: '0 10px' }}>{t('orDivider')}</span>
+                <div style={{ flex: 1, height: '1px', background: 'var(--card-border)' }}></div>
+              </div>
 
-          <button type="button" className="btn btn-action w-full flex items-center justify-center gap-3 py-3" onClick={handleGoogleLogin} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '14px', borderRadius: '8px', fontSize: '1rem', border: '1px solid var(--card-border)' }}>
-            <svg className="w-5 h-5" viewBox="0 0 24 24" width="20" height="20">
-              <path fill="currentColor" d="M12.24 10.285V14.4h6.887C18.2 16.614 15.645 18 12.24 18c-3.86 0-7-3.14-7-7s3.14-7 7-7c1.706 0 3.257.618 4.47 1.637l3.202-3.202C17.996 1.054 15.26 0 12.24 0 5.58 0 0 5.58 0 12.24s5.58 12.24 12.24 12.24c6.76 0 11.76-4.76 11.76-11.76 0-.796-.08-1.571-.22-2.315h-11.54z"/>
-            </svg>
-            Geli Akoonka Google (Sign In)
-          </button>
-          <p className="text-center" style={{ fontSize: '0.75rem', color: 'var(--text-dimmed)', marginTop: '12px', lineHeight: '1.4' }}>
-            * Xusuusin: Google Sign-in wuxuu u baahan yahay in laga shido Supabase Dashboard-kaaga.
-          </p>
+              <button type="button" className="btn btn-action w-full flex items-center justify-center gap-3 py-3" onClick={handleGoogleLogin} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '14px', borderRadius: '8px', fontSize: '1rem', border: '1px solid var(--card-border)' }}>
+                <svg className="w-5 h-5" viewBox="0 0 24 24" width="20" height="20">
+                  <path fill="currentColor" d="M12.24 10.285V14.4h6.887C18.2 16.614 15.645 18 12.24 18c-3.86 0-7-3.14-7-7s3.14-7 7-7c1.706 0 3.257.618 4.47 1.637l3.202-3.202C17.996 1.054 15.26 0 12.24 0 5.58 0 0 5.58 0 12.24s5.58 12.24 12.24 12.24c6.76 0 11.76-4.76 11.76-11.76 0-.796-.08-1.571-.22-2.315h-11.54z"/>
+                </svg>
+                {t('googleSignIn')}
+              </button>
+              <p className="text-center" style={{ fontSize: '0.75rem', color: 'var(--text-dimmed)', marginTop: '12px', lineHeight: '1.4' }}>
+                {t('googleNote')}
+              </p>
+            </>
+          )}
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="app-container">
-      {/* Toast Notification */}
-      {toast && (
-        <div className={`toast ${toast.type === 'error' ? 'border-red-500' : 'border-blue-500'}`}>
-          {toast.type === 'error' ? <AlertCircle color="#ff3b30" /> : <CheckCircle2 color="#007aff" />}
-          <span>{toast.message}</span>
-        </div>
-      )}
+  const emailPrefix = session.user.email ? session.user.email.split('@')[0] : 'User';
+  const displayName = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
 
-      {/* Header */}
-      <header className="header">
-        <div className="header-title-section">
-          <h1><Radio className="animate-pulse" color="#ff3b30" size={32} /> Social Live Notifier</h1>
-          <p>La soco marka qof aad rabto uu Live galo ama muuqaal cusub soo dhigo YouTube & TikTok</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            <span>Wuxuu u furan yahay: <strong>{session.user.email}</strong></span>
-            <span>•</span>
-            <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#ff3b30', cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}>
-              Ka Bax (Log Out)
-            </button>
+  return (
+    <div className="app-shell">
+      {/* Sidebar */}
+      <aside className="sidebar">
+        <div className="sidebar-logo">
+          <img src="/veonotes-icon-256.png" alt="Veonotes" />
+          <span>Veonotes</span>
+        </div>
+        <p className="sidebar-tagline">{t('appSubtitle')}</p>
+
+        <nav className="sidebar-nav">
+          <button
+            className={`sidebar-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            <Users size={18} />
+            {t('tabDashboard')}
+          </button>
+          <button
+            className={`sidebar-nav-item ${activeTab === 'manager' ? 'active' : ''}`}
+            onClick={() => setActiveTab('manager')}
+          >
+            <Plus size={18} />
+            {t('tabAddChannel')}
+          </button>
+          <button
+            className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+            onClick={() => setActiveTab('settings')}
+          >
+            <Settings size={18} />
+            {t('tabSettings')}
+          </button>
+        </nav>
+
+        <div className="sidebar-spacer" />
+
+        <div className="sidebar-profile">
+          <div className="profile-avatar">{session.user.email ? session.user.email.charAt(0).toUpperCase() : <User size={16} />}</div>
+          <div className="sidebar-profile-info">
+            <div className="sidebar-profile-name">{displayName}</div>
+            <div className="sidebar-profile-plan">{t('freePlan')}</div>
           </div>
         </div>
-        
-        <div className="flex gap-4">
-          <button className="btn-action" onClick={triggerManualCheck} disabled={isLoading || !isConfigured}>
-            <RefreshCw className={isLoading ? 'animate-spin' : ''} size={16} />
-            Hubi Hadda
-          </button>
-          
-          <button className="btn-action" onClick={() => setSoundEnabled(!soundEnabled)}>
-            {soundEnabled ? <Bell size={16} color="#34c759" /> : <BellOff size={16} color="#8e8e93" />}
-            Dhawaaq: {soundEnabled ? 'ON' : 'OFF'}
-          </button>
-          
-          <button 
-            className={`btn-action ${notificationsEnabled ? 'text-green-500' : 'text-gray-400'}`} 
-            onClick={requestNotificationPermission}
-          >
-            <Bell size={16} />
-            Push Alert
-          </button>
-        </div>
-      </header>
+      </aside>
 
-      {/* Tabs */}
-      <div className="tabs">
-        <button 
-          className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-          onClick={() => setActiveTab('dashboard')}
-        >
-          <Users size={16} style={{ marginRight: '6px', display: 'inline' }} />
-          Dashboard
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'manager' ? 'active' : ''}`}
-          onClick={() => setActiveTab('manager')}
-        >
-          <Plus size={16} style={{ marginRight: '6px', display: 'inline' }} />
-          Ku dar Kanaal
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
-          onClick={() => setActiveTab('settings')}
-        >
-          <Settings size={16} style={{ marginRight: '6px', display: 'inline' }} />
-          Settings
-        </button>
-      </div>
+      {/* Main area */}
+      <div className="main-area">
+        {/* Toast Notification */}
+        {toast && (
+          <div className={`toast ${toast.type === 'error' ? 'border-red-500' : 'border-blue-500'}`}>
+            {toast.type === 'error' ? <AlertCircle color="#ff3b30" /> : <CheckCircle2 color="#5E17F5" />}
+            <span>{toast.message}</span>
+          </div>
+        )}
+
+        {/* Topbar */}
+        <header className="header">
+          <div className="header-title-section">
+            <h1 style={{ fontSize: '1.7rem' }}>👋 {t('welcomeBack')}, {displayName}</h1>
+            <p>{t('welcomeSubtitle')}</p>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" style={{ padding: '10px 18px', fontSize: '0.9rem' }} onClick={triggerManualCheck} disabled={isLoading || !isConfigured}>
+              <RefreshCw className={isLoading ? 'animate-spin' : ''} size={16} style={{ marginRight: '6px' }} />
+              {t('checkNow')}
+            </button>
+
+            <button
+              className="theme-toggle"
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              title={`${t('soundLabel')}: ${soundEnabled ? 'ON' : 'OFF'}`}
+            >
+              {soundEnabled ? <Volume2 size={18} color="#34c759" /> : <VolumeX size={18} color="#8e8e93" />}
+            </button>
+
+            <button
+              className="theme-toggle"
+              onClick={requestNotificationPermission}
+              title={t('pushAlert')}
+            >
+              {notificationsEnabled ? <Bell size={18} color="#34c759" /> : <BellOff size={18} color="#8e8e93" />}
+            </button>
+
+            <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? t('lightMode') : t('darkMode')}>
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+
+            <div style={{ position: 'relative' }} ref={profileMenuRef}>
+              <button className="profile-trigger" onClick={() => setShowProfileMenu(prev => !prev)}>
+                <div className="profile-avatar">{session.user.email ? session.user.email.charAt(0).toUpperCase() : <User size={16} />}</div>
+                <ChevronDown size={14} />
+              </button>
+
+              {showProfileMenu && (
+                <div className="profile-dropdown">
+                  <div className="profile-dropdown-header">
+                    <div className="profile-avatar">
+                      {session.user.email ? session.user.email.charAt(0).toUpperCase() : <User size={18} />}
+                    </div>
+                    <div className="profile-dropdown-info">
+                      <div className="profile-dropdown-info-label">{t('loggedInAs')}</div>
+                      <div className="profile-dropdown-info-email">{session.user.email}</div>
+                    </div>
+                  </div>
+
+                  <div className="profile-dropdown-section">
+                    <div className="profile-dropdown-row">
+                      <span className="profile-dropdown-label">{t('themeLabel')}</span>
+                      <button className="theme-toggle" onClick={toggleTheme}>
+                        {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+                      </button>
+                    </div>
+                    <div className="profile-dropdown-row">
+                      <span className="profile-dropdown-label">{t('languageLabel')}</span>
+                      <div className="lang-switch">
+                        <button type="button" className={language === 'so' ? 'active' : ''} onClick={() => changeLanguage('so')}>SO</button>
+                        <button type="button" className={language === 'en' ? 'active' : ''} onClick={() => changeLanguage('en')}>EN</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="profile-dropdown-menu">
+                    <button className="profile-menu-item" onClick={() => { setActiveTab('settings'); setShowProfileMenu(false); }}>
+                      <Settings size={16} /> {t('fullSettings')}
+                    </button>
+                    <button className="profile-menu-item danger" onClick={handleLogout}>
+                      <LogOut size={16} /> {t('logOut')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
 
       {/* Main Content */}
       {!isConfigured ? (
         <div className="glass-card text-center py-12">
-          <AlertCircle className="mx-auto mb-4" size={48} color="#007aff" />
+          <AlertCircle className="mx-auto mb-4" size={48} color="#5E17F5" />
           <h2 className="text-xl font-bold mb-2">Supabase Lama Dheeg-gelin!</h2>
           <p className="text-gray-400 mb-6 max-w-md mx-auto">
             Fadlan geli xogta Supabase-kaaga (URL iyo Anon Key) ee Settings si aad u bilowdo isticmaalka app-ka.
@@ -1190,8 +1535,8 @@ function App() {
               {channels.length === 0 ? (
                 <div className="glass-card empty-state">
                   <Youtube size={48} />
-                  <h3>Weli ma jiraan kanaalo aad la socoto</h3>
-                  <p className="mt-2">Guji "Ku dar Kanaal" si aad u bilowdo</p>
+                  <h3>{t('noChannelsTitle')}</h3>
+                  <p className="mt-2">{t('noChannelsSub')}</p>
                 </div>
               ) : (
                 <div className="channels-grid">
@@ -1199,11 +1544,14 @@ function App() {
                     <div key={channel.id} className={`glass-card channel-card ${channel.is_live ? 'is-live' : ''}`}>
                       <div className="channel-header">
                         <span className={`channel-platform ${channel.platform === 'youtube' ? 'platform-youtube' : 'platform-tiktok'}`}>
+                          <span className={`platform-icon ${channel.platform === 'youtube' ? 'platform-icon-youtube' : 'platform-icon-tiktok'}`}>
+                            {channel.platform === 'youtube' ? <Play size={10} fill="currentColor" /> : <Music2 size={11} />}
+                          </span>
                           {channel.platform}
                         </span>
                         
                         <span className={`status-badge ${channel.is_live ? 'status-live' : 'status-offline'}`}>
-                          {channel.is_live ? '🔴 LIVE' : 'OFFLINE'}
+                          {channel.is_live ? `🔴 ${t('statusLive')}` : t('statusOffline')}
                         </span>
                       </div>
                       
@@ -1214,10 +1562,10 @@ function App() {
                             alt={channel.name} 
                             className="channel-avatar"
                             onError={() => setAvatarErrors(prev => ({ ...prev, [channel.id]: true }))}
-                            style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.08)' }}
+                            style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--card-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
                           />
                         ) : (
-                          <div className="channel-avatar-placeholder" style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>
+                          <div className="channel-avatar-placeholder" style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--surface-1)', border: '2px solid var(--card-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>
                             {channel.name ? channel.name.charAt(0) : '@'}
                           </div>
                         )}
@@ -1231,64 +1579,65 @@ function App() {
                       
                       <div className="channel-info-row">
                         <div>
-                          <div className="info-label">Check-gii Ugu Dambeeyay</div>
+                          <div className="info-label">{t('lastChecked')}</div>
                           <div className="info-value">
-                            {channel.last_checked ? new Date(channel.last_checked).toLocaleTimeString() : 'Weli lama hubin'}
+                            {channel.last_checked ? new Date(channel.last_checked).toLocaleTimeString() : t('neverChecked')}
                           </div>
                         </div>
-                        
-                        {channel.last_video_url && (
-                          <div>
-                            <div className="info-label">Muuqaalkii Ugu Dambeeyay</div>
-                            <div className="info-value">
+
+                        <div>
+                          <div className="info-label">{t('lastVideo')}</div>
+                          <div className="info-value">
+                            {channel.last_video_url ? (
                               <a href={channel.last_video_url} target="_blank" rel="noopener noreferrer">
-                                Booqo Muuqaalka
+                                {t('viewVideo')}
                               </a>
-                            </div>
+                            ) : (
+                              <span style={{ color: 'var(--text-dimmed)' }}>{t('noVideoYet')}</span>
+                            )}
                           </div>
-                        )}
+                        </div>
                       </div>
                       
                       <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
                         {channel.is_live ? (
-                          <button 
+                          <button
                             type="button"
-                            className="btn btn-primary" 
+                            className="btn btn-primary"
                             style={{ flex: 1, padding: '10px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                            onClick={() => setActivePlayer({ 
-                              channel, 
-                              type: 'live', 
-                              videoId: channel.platform === 'youtube' ? channel.identifier : null 
+                            onClick={() => setActivePlayer({
+                              channel,
+                              type: 'live',
+                              videoId: channel.platform === 'youtube' ? channel.identifier : null
                             })}
                           >
-                            <Play size={14} /> Daawo Live-ka
+                            <Play size={14} /> {t('watchLive')}
                           </button>
                         ) : (
-                          <button 
+                          <button
                             type="button"
-                            className="btn btn-action" 
-                            style={{ flex: 1, padding: '10px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', border: '1px solid var(--card-border)' }}
+                            className="btn-action"
+                            style={{ flex: 1, padding: '10px', fontSize: '0.85rem', justifyContent: 'center' }}
                             onClick={() => {
-                              const vId = channel.last_video_url 
-                                ? (channel.platform === 'youtube' 
-                                    ? extractYouTubeId(channel.last_video_url) 
+                              const vId = channel.last_video_url
+                                ? (channel.platform === 'youtube'
+                                    ? extractYouTubeId(channel.last_video_url)
                                     : extractTikTokId(channel.last_video_url))
                                 : null;
-                              setActivePlayer({ 
-                                channel, 
-                                type: 'video', 
-                                videoId: vId 
+                              setActivePlayer({
+                                channel,
+                                type: 'video',
+                                videoId: vId
                               });
                             }}
                           >
-                            <Video size={14} /> Daawo Muuqaalada
+                            <Video size={14} /> {t('watchVideos')}
                           </button>
                         )}
+                        <button type="button" className="btn-delete-icon" onClick={() => handleDeleteChannel(channel.id)} title={t('deleteBtn')}>
+                          <Trash2 size={16} />
+                        </button>
                       </div>
-
-                      <button type="button" className="btn-delete" onClick={() => handleDeleteChannel(channel.id)} style={{ width: 'fit-content', alignSelf: 'flex-end', marginTop: '12px' }}>
-                        <Trash2 size={14} style={{ display: 'inline', marginRight: '4px' }} /> Tirtir
-                      </button>
                     </div>
                   ))}
                 </div>
@@ -1298,7 +1647,7 @@ function App() {
 
           {activeTab === 'manager' && (
             <div className="glass-card max-w-lg mx-auto">
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '20px' }}>Ku dar Kanaal Cusub</h2>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '20px' }}>{t('addChannelTitle')}</h2>
               
               {/* Mode Toggle Tabs */}
               <div className="tabs" style={{ display: 'flex', width: '100%', marginBottom: '24px' }}>
@@ -1308,15 +1657,15 @@ function App() {
                   onClick={() => { setAddMode('url'); setResolvedChannel(null); }}
                   style={{ flex: 1, textAlign: 'center' }}
                 >
-                  Ku dar Link (URL)
+                  {t('addByUrl')}
                 </button>
-                <button 
+                <button
                   type="button"
                   className={`tab-btn ${addMode === 'manual' ? 'active' : ''}`}
                   onClick={() => { setAddMode('manual'); setResolvedChannel(null); }}
                   style={{ flex: 1, textAlign: 'center' }}
                 >
-                  Ku dar Gacanta (Manual)
+                  {t('addManual')}
                 </button>
               </div>
 
@@ -1324,10 +1673,10 @@ function App() {
                 <div>
                   <form onSubmit={handleResolveUrl} style={{ marginBottom: '20px' }}>
                     <div className="form-group">
-                      <label>Geli Link-ga Kanaalka (Channel URL)</label>
+                      <label>{t('channelUrlLabel')}</label>
                       <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           className="input-field"
                           placeholder="Tusaale: https://www.youtube.com/@Google"
                           value={channelUrl}
@@ -1335,11 +1684,11 @@ function App() {
                           style={{ margin: 0, flex: 1 }}
                         />
                         <button type="submit" className="btn btn-action" disabled={isResolving} style={{ height: '48px', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {isResolving ? 'Hubinaya...' : 'Hubi Link-ga'}
+                          {isResolving ? t('checkingLink') : t('checkLink')}
                         </button>
                       </div>
                       <p className="text-xs text-gray-400 mt-2" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        * Waxaa la taageerayaa link-yada YouTube-ka (Channel ama Handle) iyo TikTok profiles.
+                        {t('urlSupportNote')}
                       </p>
                     </div>
                   </form>
@@ -1350,8 +1699,8 @@ function App() {
                       display: 'flex',
                       alignItems: 'center',
                       gap: '16px',
-                      background: 'rgba(255,255,255,0.02)',
-                      border: resolvedChannel.platform === 'youtube' ? '1px solid rgba(255, 59, 48, 0.2)' : '1px solid rgba(255,255,255,0.1)',
+                      background: 'var(--card-bg)',
+                      border: resolvedChannel.platform === 'youtube' ? '1px solid rgba(255, 59, 48, 0.2)' : '1px solid var(--card-border)',
                       borderRadius: '12px',
                       padding: '16px',
                       marginBottom: '24px',
@@ -1359,14 +1708,14 @@ function App() {
                     }}>
                       <div style={{ position: 'relative' }}>
                         {resolvedChannel.avatar && !avatarErrors.preview ? (
-                          <img 
-                            src={cleanAvatarUrl(resolvedChannel.avatar)} 
-                            alt={resolvedChannel.name} 
+                          <img
+                            src={cleanAvatarUrl(resolvedChannel.avatar)}
+                            alt={resolvedChannel.name}
                             onError={() => setAvatarErrors(prev => ({ ...prev, preview: true }))}
-                            style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.1)' }}
+                            style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--card-border)' }}
                           />
                         ) : (
-                          <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 'bold' }}>
+                          <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'var(--surface-1)', border: '2px solid var(--card-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-white)' }}>
                             {resolvedChannel.name ? resolvedChannel.name.charAt(0) : '@'}
                           </div>
                         )}
@@ -1375,14 +1724,17 @@ function App() {
                           bottom: '-6px',
                           right: '-6px',
                           fontSize: '0.6rem',
-                          padding: '2px 6px',
+                          padding: '3px 8px',
+                          borderRadius: '30px',
+                          background: 'var(--surface-solid)',
+                          border: '1px solid var(--card-border)',
                         }}>
                           {resolvedChannel.platform}
                         </span>
                       </div>
                       
                       <div style={{ flex: 1, overflow: 'hidden' }}>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'white', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-white)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                           {resolvedChannel.name}
                         </div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
@@ -1399,14 +1751,14 @@ function App() {
                     style={{ width: '100%', padding: '14px', borderRadius: '8px', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                   >
                     <Plus size={18} />
-                    {isLoading ? 'Lagu darayaa...' : 'Ku Dar Kanaalka'}
+                    {isLoading ? t('adding') : t('addChannelBtn')}
                   </button>
                 </div>
               ) : (
                 <form onSubmit={handleAddChannel}>
                   <div className="form-group">
-                    <label>Bar-bulsho (Platform)</label>
-                    <select 
+                    <label>{t('platformLabel')}</label>
+                    <select
                       className="select-field"
                       value={newChannel.platform}
                       onChange={(e) => setNewChannel({...newChannel, platform: e.target.value})}
@@ -1415,11 +1767,11 @@ function App() {
                       <option value="tiktok">TikTok</option>
                     </select>
                   </div>
-                  
+
                   <div className="form-group">
-                    <label>Identifer (YouTube Channel ID / TikTok Username)</label>
-                    <input 
-                      type="text" 
+                    <label>{t('identifierLabel')}</label>
+                    <input
+                      type="text"
                       className="input-field"
                       placeholder={newChannel.platform === 'youtube' ? 'Tusaale: UC_x5XG1OV2P6uYZ5ji9FzGg' : 'Tusaale: khaby.lame'}
                       value={newChannel.identifier}
@@ -1427,25 +1779,25 @@ function App() {
                     />
                     {newChannel.platform === 'youtube' && (
                       <p className="text-xs text-gray-400 mt-1" style={{ fontSize: '0.8rem', marginTop: '-10px', marginBottom: '15px', color: 'var(--text-muted)' }}>
-                        * Fiiro gaar ah: YouTube u isticmaal **Channel ID-ga rasmiga ah** (ka bilaabma UC...) ee ha isticmaalin handle-ka (@name).
+                        {t('youtubeIdNote')}
                       </p>
                     )}
                   </div>
-                  
+
                   <div className="form-group">
-                    <label>Magaca Qofka (Display Name)</label>
-                    <input 
-                      type="text" 
+                    <label>{t('displayNameLabel')}</label>
+                    <input
+                      type="text"
                       className="input-field"
-                      placeholder="Geli magaca aad u bixinayso"
+                      placeholder={t('displayNamePlaceholder')}
                       value={newChannel.name}
                       onChange={(e) => setNewChannel({...newChannel, name: e.target.value})}
                     />
                   </div>
-                  
+
                   <button type="submit" className="btn btn-primary w-full flex items-center justify-center gap-2" disabled={isLoading} style={{ width: '100%', padding: '14px', borderRadius: '8px', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                     <Plus size={18} />
-                    {isLoading ? 'Lagu darayaa...' : 'Ku Dar'}
+                    {isLoading ? t('adding') : t('addBtn')}
                   </button>
                 </form>
               )}
@@ -1455,46 +1807,76 @@ function App() {
       )}
 
       {activeTab === 'settings' && (
-        <div className="max-w-2xl mx-auto">
-          {/* E-Mail Settings */}
-          <div className="glass-card">
-            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-              <Mail color="#007aff" /> E-Mail Notification Settings
+        <div className="max-w-2xl mx-auto" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* E-Mail Settings Status Card */}
+          <div className="glass-card" style={{ padding: '32px' }}>
+            <h2 className="text-xl font-bold mb-6 flex items-center gap-3">
+              <Mail color="#5E17F5" size={24} /> 
+              {language === 'so' ? 'Habaynta Ogeysiiska Email-ka' : 'Email Notification Settings'}
             </h2>
             
-            <form onSubmit={handleSaveSMTP}>
-              <div className="form-group">
-                <label>Habka loo dirayo E-Mail-ka (Email Provider)</label>
-                <select 
-                  className="select-field"
-                  value={smtp.provider || 'smtp'}
-                  onChange={(e) => setSmtp({...smtp, provider: e.target.value})}
-                >
-                  <option value="smtp">SMTP (Gmail, Outlook, etc.)</option>
-                  <option value="bird">Bird API (Messagebird)</option>
-                  <option value="gas">Google Apps Script (Bilaash & Fudud)</option>
-                </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '20px', borderRadius: '16px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--card-border)', marginBottom: '24px' }}>
+              <div className={`status-pill ${isEmailConfigured ? 'status-pill-green' : 'status-pill-red'}`} style={{ flexShrink: 0 }}></div>
+              <div style={{ flex: 1 }}>
+                <h4 style={{ fontWeight: 700, fontSize: '1rem', color: '#fff', marginBottom: '4px' }}>
+                  {isEmailConfigured 
+                    ? (language === 'so' ? 'Google Apps Script: Waa diyaar' : 'Google Apps Script: Configured') 
+                    : (language === 'so' ? 'Google Apps Script: Lalama xiriiri waayay' : 'Google Apps Script: Not Configured')}
+                </h4>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                  {isEmailConfigured 
+                    ? (language === 'so' ? 'Ogeysiisyada email-ka waxaa si toos ah loogu soo diri doonaa email-kaaga hoos ku qoran.' : 'Email alerts will be sent automatically to your verified email below.') 
+                    : (language === 'so' ? 'GAS_URL kuma jiro backend/.env. Fadlan raac tillaabooyinka hoose si aad u shido.' : 'GAS_URL is not set in backend/.env. Follow the steps below to configure.')}
+                </p>
               </div>
+            </div>
 
-              {smtp.provider === 'gas' ? (
-                <>
-                  <div className="form-group">
-                    <label>Google Apps Script Web App URL</label>
-                    <input 
-                      type="text" 
-                      className="input-field"
-                      placeholder="https://script.google.com/macros/s/.../exec"
-                      value={smtp.gas_url || ''}
-                      onChange={(e) => setSmtp({...smtp, gas_url: e.target.value})}
-                    />
-                  </div>
+            <div className="form-group" style={{ marginBottom: '24px' }}>
+              <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                {language === 'so' ? 'Email-kaaga (Ogeysiisyada lagugu soo dirayo)' : 'Your Email (For receiving notifications)'}
+              </label>
+              <input 
+                type="email" 
+                className="input-field"
+                value={session?.user?.email || ''}
+                disabled
+                style={{ opacity: 0.7, cursor: 'not-allowed', backgroundColor: 'rgba(255,255,255,0.03)', marginTop: '8px' }}
+              />
+            </div>
 
-                  <div className="mt-4 p-4 rounded-lg bg-white/5 border border-white/5 text-xs text-gray-400" style={{ fontSize: '0.85rem', lineHeight: '1.4rem', marginBottom: '20px' }}>
-                    <p className="font-semibold text-white mb-2">Sida loo diyaariyo Google Apps Script:</p>
-                    <ol className="list-decimal list-inside space-y-2">
-                      <li>Aad <a href="https://script.google.com" target="_blank" rel="noreferrer" style={{color: '#007aff', textDecoration: 'underline'}}>script.google.com</a> oo ku abuur akoon/mashruuc cusub.</li>
-                      <li>Ku shub (paste) koodhkan hoose:
-                        <pre style={{background: '#000', padding: '12px', borderRadius: '6px', marginTop: '6px', overflowX: 'auto', color: '#34c759', fontFamily: 'monospace'}}>
+            {isEmailConfigured && (
+              <button 
+                type="button" 
+                className="btn btn-primary" 
+                style={{ width: '100%', padding: '14px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }} 
+                onClick={sendTestEmail} 
+                disabled={isLoading}
+              >
+                <Mail size={18} />
+                {language === 'so' ? 'Tijaabi Email-ka' : 'Send Test Email'}
+              </button>
+            )}
+          </div>
+
+          {/* Setup Guide Card */}
+          <div className="glass-card" style={{ padding: '32px' }}>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fff', marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Settings size={20} color="#5E17F5" />
+              {language === 'so' ? 'Sida loo diyaariyo Google Apps Script:' : 'How to set up Google Apps Script:'}
+            </h3>
+            
+            <div style={{ fontSize: '0.88rem', lineHeight: '1.6', color: 'var(--text-muted)' }}>
+              <ol className="list-decimal list-inside space-y-3" style={{ paddingLeft: '4px' }}>
+                <li>
+                  {language === 'so' 
+                    ? <>Booqo <a href="https://script.google.com" target="_blank" rel="noreferrer" style={{color: 'var(--accent-primary)', textDecoration: 'underline'}}>script.google.com</a> oo ku samee mashruuc cusub (New Project).</>
+                    : <>Go to <a href="https://script.google.com" target="_blank" rel="noreferrer" style={{color: 'var(--accent-primary)', textDecoration: 'underline'}}>script.google.com</a> and create a new project.</>}
+                </li>
+                <li>
+                  {language === 'so'
+                    ? 'Ku shub (paste) koodhkan hoose qaybta code-ka:'
+                    : 'Paste the following code into the editor:'}
+                  <pre style={{ background: '#000', padding: '14px', borderRadius: '10px', marginTop: '8px', marginBottom: '8px', overflowX: 'auto', color: '#34c759', fontFamily: 'monospace', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.05)' }}>
 {`function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
@@ -1510,111 +1892,35 @@ function App() {
       .setMimeType(ContentService.MimeType.JSON);
   }
 }`}
-                        </pre>
-                      </li>
-                      <li>Guji <strong>Deploy</strong> &rarr; <strong>New Deployment</strong> (dhinaca sare).</li>
-                      <li>Dooro <strong>Web App</strong> (calamada gear-ka hadii uusan doorneen).</li>
-                      <li>U dooro Execute As: <strong>Me</strong> iyo Who has access: <strong>Anyone</strong> (tani waa muhiim).</li>
-                      <li>Guji <strong>Deploy</strong>, dabadeed oggolaanshaha sii (Authorize access), nuqul ka qaado <strong>Web App URL</strong> oo ku dheji sanduuqa sare.</li>
-                    </ol>
-                  </div>
-                </>
-              ) : (!smtp.provider || smtp.provider === 'smtp') ? (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="form-group">
-                      <label>SMTP Host</label>
-                      <input 
-                        type="text" 
-                        className="input-field"
-                        placeholder="smtp.gmail.com"
-                        value={smtp.host || ''}
-                        onChange={(e) => setSmtp({...smtp, host: e.target.value})}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>SMTP Port</label>
-                      <input 
-                        type="text" 
-                        className="input-field"
-                        placeholder="587"
-                        value={smtp.port || ''}
-                        onChange={(e) => setSmtp({...smtp, port: e.target.value})}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>SMTP User (Email-ka wax laga dirayo)</label>
-                    <input 
-                      type="email" 
-                      className="input-field"
-                      placeholder="tusaale@gmail.com"
-                      value={smtp.user || ''}
-                      onChange={(e) => setSmtp({...smtp, user: e.target.value})}
-                    />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>SMTP App Password</label>
-                    <input 
-                      type="password" 
-                      className="input-field"
-                      placeholder="••••••••••••••••"
-                      value={smtp.pass || ''}
-                      onChange={(e) => setSmtp({...smtp, pass: e.target.value})}
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="form-group">
-                    <label>Bird API Key</label>
-                    <input 
-                      type="password" 
-                      className="input-field"
-                      placeholder="bk_eu1_..."
-                      value={smtp.bird_api_key || ''}
-                      onChange={(e) => setSmtp({...smtp, bird_api_key: e.target.value})}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Bird From Email (Email-ka wax laga dirayo)</label>
-                    <input 
-                      type="text" 
-                      className="input-field"
-                      placeholder="onboarding@messagebird.dev"
-                      value={smtp.bird_from || ''}
-                      onChange={(e) => setSmtp({...smtp, bird_from: e.target.value})}
-                    />
-                  </div>
-                </>
-              )}
-              
-              <div className="form-group">
-                <label>Email-kaaga (Laguugu soo dirayo ogeysiiska)</label>
-                <input 
-                  type="email" 
-                  className="input-field"
-                  value={session?.user?.email || ''}
-                  disabled
-                  style={{ opacity: 0.6, cursor: 'not-allowed', backgroundColor: 'rgba(255,255,255,0.05)' }}
-                />
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '-10px', marginBottom: '15px' }}>
-                  * Ogeysiisyada waxaa loo diri doonaa emailkaaga Google ee kor ku qoran.
-                </p>
-              </div>
-              
-              <div className="flex gap-4">
-                <button type="submit" className="btn btn-primary flex-1" disabled={isLoading || !isConfigured}>
-                  Kaydi Settings-ka
-                </button>
-                <button type="button" className="btn-action flex-1 justify-center" onClick={sendTestEmail} disabled={isLoading || !isConfigured}>
-                  Tijaabi Email-ka
-                </button>
-              </div>
-            </form>
+                  </pre>
+                </li>
+                <li>
+                  {language === 'so'
+                    ? <>Guji <strong>Deploy</strong> &rarr; <strong>New Deployment</strong>.</>
+                    : <>Click <strong>Deploy</strong> &rarr; <strong>New Deployment</strong>.</>}
+                </li>
+                <li>
+                  {language === 'so'
+                    ? <>Dooro nooca <strong>Web App</strong>.</>
+                    : <>Select type <strong>Web App</strong>.</>}
+                </li>
+                <li>
+                  {language === 'so'
+                    ? <>U dooro Execute As: <strong>Me</strong> iyo Who has access: <strong>Anyone</strong> (Tani waa muhiim!).</>
+                    : <>Set Execute As: <strong>Me</strong> and Who has access: <strong>Anyone</strong> (This is critical!).</>}
+                </li>
+                <li>
+                  {language === 'so'
+                    ? <>Guji <strong>Deploy</strong>, oggolow fasaxa (Authorize access), dabadeed nuqul ka qaado (copy) <strong>Web App URL</strong>.</>
+                    : <>Click <strong>Deploy</strong>, authorize the access, then copy the generated <strong>Web App URL</strong>.</>}
+                </li>
+                <li>
+                  {language === 'so'
+                    ? <>Fungla <code>backend/.env</code>, ku dar <code>GAS_URL=halkan_geli_url_kaaga</code>, dabadeedna dib u kici server-ka backend-ka.</>
+                    : <>Open <code>backend/.env</code>, add <code>GAS_URL=your_web_app_url_here</code>, and restart the backend server.</>}
+                </li>
+              </ol>
+            </div>
           </div>
         </div>
       )}
@@ -1801,7 +2107,7 @@ function App() {
                                     setActivePlayer(prev => ({ ...prev, videoId: vId, type: 'video' }));
                                     e.target.value = '';
                                   } else {
-                                    showToast('Link-ga TikTok ma ahan mid sax ah', 'error');
+                                    showToast(t('toastInvalidTikTokLink'), 'error');
                                   }
                                 }
                               }}
@@ -1831,7 +2137,7 @@ function App() {
                                       setActivePlayer(prev => ({ ...prev, videoId: vId, type: 'video' }));
                                       setTiktokInputUrl('');
                                     } else {
-                                      showToast('Link-ga TikTok ma ahan mid sax ah', 'error');
+                                      showToast(t('toastInvalidTikTokLink'), 'error');
                                     }
                                   }
                                 }}
@@ -1847,7 +2153,7 @@ function App() {
                                     setActivePlayer(prev => ({ ...prev, videoId: vId, type: 'video' }));
                                     setTiktokInputUrl('');
                                   } else {
-                                    showToast('Link-ga TikTok ma ahan mid sax ah', 'error');
+                                    showToast(t('toastInvalidTikTokLink'), 'error');
                                   }
                                 }}
                               >
@@ -2224,6 +2530,7 @@ function App() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -67,10 +67,16 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-// Helper to send email notifications
-async function sendEmailNotification(smtp, channel, isLive, videoUrl, isNewVideo) {
-  if (!smtp || !smtp.to_email) {
-    console.log("Email configurations are missing. Skipping email notification.");
+// Helper to send email notifications via Google Apps Script configured in backend/.env
+async function sendEmailNotification(toEmail, channel, isLive, videoUrl, isNewVideo) {
+  const gasUrl = process.env.GAS_URL;
+  if (!gasUrl) {
+    console.log("GAS_URL is not configured in backend/.env. Skipping email notification.");
+    return;
+  }
+
+  if (!toEmail) {
+    console.log("No recipient email provided. Skipping email notification.");
     return;
   }
 
@@ -106,68 +112,24 @@ async function sendEmailNotification(smtp, channel, isLive, videoUrl, isNewVideo
     `;
   }
 
-  // Handle Google Apps Script provider
-  if (smtp.provider === 'gas' && smtp.gas_url) {
-    try {
-      const response = await fetch(smtp.gas_url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: smtp.to_email,
-          subject: subject,
-          html: html
-        })
-      });
-      const resData = await response.json();
-      if (resData.success) {
-        console.log(`Email successfully sent via Google Apps Script to ${smtp.to_email}`);
-      } else {
-        console.error("Google Apps Script API Error:", resData.error);
-      }
-    } catch (err) {
-      console.error("Google Apps Script Connection Error: Failed to send email alert:", err.message);
-    }
-  } else if (smtp.provider === 'bird' || smtp.bird_api_key) {
-    try {
-      const { BirdClient } = require('@messagebird/sdk');
-      const bird = new BirdClient({ apiKey: smtp.bird_api_key });
-      await bird.email.send({
-        from: smtp.bird_from || "onboarding@messagebird.dev",
-        to: [smtp.to_email],
+  try {
+    const response = await fetch(gasUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: toEmail,
         subject: subject,
         html: html
-      });
-      console.log(`Email successfully sent via Bird to ${smtp.to_email}`);
-    } catch (err) {
-      console.error("Bird API Error: Failed to send email alert:", err.message);
+      })
+    });
+    const resData = await response.json();
+    if (resData.success) {
+      console.log(`Email successfully sent via Google Apps Script to ${toEmail}`);
+    } else {
+      console.error("Google Apps Script API Error:", resData.error);
     }
-  } else {
-    // Nodemailer SMTP fallback
-    if (!smtp.host || !smtp.user || !smtp.pass) {
-      console.log("SMTP not fully configured. Skipping SMTP email.");
-      return;
-    }
-    try {
-      const transporter = nodemailer.createTransport({
-        host: smtp.host,
-        port: parseInt(smtp.port) || 587,
-        secure: parseInt(smtp.port) === 465,
-        auth: {
-          user: smtp.user,
-          pass: smtp.pass
-        }
-      });
-
-      await transporter.sendMail({
-        from: `"Social Alert Engine" <${smtp.user}>`,
-        to: smtp.to_email,
-        subject: subject,
-        html: html
-      });
-      console.log(`Email successfully sent via SMTP to ${smtp.to_email}`);
-    } catch (err) {
-      console.error("Nodemailer Error: Failed to send email alert:", err.message);
-    }
+  } catch (err) {
+    console.error("Google Apps Script Connection Error: Failed to send email alert:", err.message);
   }
 }
 
@@ -290,9 +252,6 @@ async function checkAllChannels() {
     const { data: channels, error } = await supabase.from('channels').select('*');
     if (error) throw error;
 
-    const { data: settingsData } = await supabase.from('settings').select('*');
-    const smtpConfig = settingsData?.find(s => s.key === 'smtp_config')?.value;
-
     for (const channel of channels) {
       let checkResult;
       if (channel.platform === 'youtube') {
@@ -325,14 +284,8 @@ async function checkAllChannels() {
           }
         }
 
-        // Fallback to settings to_email
-        if (!targetEmail && smtpConfig) {
-          targetEmail = smtpConfig.to_email;
-        }
-
         if (targetEmail) {
-          const configWithReceiver = { ...smtpConfig, to_email: targetEmail };
-          await sendEmailNotification(configWithReceiver, channel, checkResult.isLive, checkResult.latestVideoUrl, newVideoUploaded);
+          await sendEmailNotification(targetEmail, channel, checkResult.isLive, checkResult.latestVideoUrl, newVideoUploaded);
         }
       }
 
@@ -366,6 +319,7 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     supabaseConnected: !!supabase,
+    emailConfigured: !!process.env.GAS_URL,
     timestamp: new Date().toISOString()
   });
 });
@@ -380,78 +334,42 @@ app.post('/api/check', async (req, res) => {
 });
 
 app.post('/api/send-test-email', async (req, res) => {
-  const { smtp_config } = req.body;
-  if (!smtp_config || !smtp_config.to_email) {
-    return res.status(400).json({ error: "Missing required configurations (to_email)" });
+  const { to_email } = req.body;
+  if (!to_email) {
+    return res.status(400).json({ error: "Email address is required." });
   }
 
-  const subject = "Test Email: Social Live Notifier";
+  const gasUrl = process.env.GAS_URL;
+  if (!gasUrl) {
+    return res.status(400).json({ error: "GAS_URL is not configured in backend/.env" });
+  }
+
+  const subject = "Test Email: Veonotes";
   const html = `
     <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #007aff; border-radius: 8px;">
       <h2 style="color: #007aff;">Email Connection Verified!</h2>
-      <p>This is a test email confirming that your email notification system is working perfectly.</p>
+      <p>This is a test email confirming that your backend Google Apps Script notification system is working perfectly.</p>
     </div>
   `;
 
-  if (smtp_config.provider === 'gas' && smtp_config.gas_url) {
-    try {
-      const response = await fetch(smtp_config.gas_url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: smtp_config.to_email,
-          subject: subject,
-          html: html
-        })
-      });
-      const resData = await response.json();
-      if (resData.success) {
-        res.json({ success: true, message: "Test email sent successfully via Google Apps Script!" });
-      } else {
-        res.status(500).json({ success: false, error: `Google Apps Script Error: ${resData.error}` });
-      }
-    } catch (err) {
-      res.status(500).json({ success: false, error: err.message });
-    }
-  } else if (smtp_config.provider === 'bird' || smtp_config.bird_api_key) {
-    try {
-      const { BirdClient } = require('@messagebird/sdk');
-      const bird = new BirdClient({ apiKey: smtp_config.bird_api_key });
-      await bird.email.send({
-        from: smtp_config.bird_from || "onboarding@messagebird.dev",
-        to: [smtp_config.to_email],
+  try {
+    const response = await fetch(gasUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: to_email,
         subject: subject,
         html: html
-      });
-      res.json({ success: true, message: "Test email sent successfully via Bird!" });
-    } catch (err) {
-      res.status(500).json({ success: false, error: `Bird API Error: ${err.message}` });
+      })
+    });
+    const resData = await response.json();
+    if (resData.success) {
+      res.json({ success: true, message: "Test email sent successfully via Google Apps Script!" });
+    } else {
+      res.status(500).json({ success: false, error: `Google Apps Script Error: ${resData.error}` });
     }
-  } else {
-    if (!smtp_config.host || !smtp_config.user || !smtp_config.pass) {
-      return res.status(400).json({ error: "Missing required SMTP configurations" });
-    }
-    try {
-      const transporter = nodemailer.createTransport({
-        host: smtp_config.host,
-        port: parseInt(smtp_config.port) || 587,
-        secure: parseInt(smtp_config.port) === 465,
-        auth: {
-          user: smtp_config.user,
-          pass: smtp_config.pass
-        }
-      });
-
-      await transporter.sendMail({
-        from: `"Social Alert Engine" <${smtp_config.user}>`,
-        to: smtp_config.to_email,
-        subject: subject,
-        html: html
-      });
-      res.json({ success: true, message: "Test email sent successfully via SMTP!" });
-    } catch (err) {
-      res.status(500).json({ success: false, error: err.message });
-    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

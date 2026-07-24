@@ -1,4 +1,4 @@
-# Social Live Notifier
+# Veonotes
 
 Mashruucaan wuxuu kuu sahlayaa inaad la socoto marka qof aad rabto uu Live soo galo ama muuqaal cusub soo dhigo YouTube iyo TikTok, isagoo kuu soo diraya Email, Desktop Notification, iyo dhawaaq digniin ah.
 
