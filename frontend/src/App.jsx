@@ -593,6 +593,10 @@ function App() {
   };
 
   const handleGoogleLogin = async () => {
+    if (!supabase) {
+      showToast(t('toastServerUnreachable'), 'error');
+      return;
+    }
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -608,6 +612,10 @@ function App() {
 
   const handleEmailAuth = async (e) => {
     e.preventDefault();
+    if (!supabase) {
+      showToast(t('toastServerUnreachable'), 'error');
+      return;
+    }
     if (!email || !password) {
       showToast(t('toastFillEmailPassword'), 'error');
       return;
@@ -638,6 +646,10 @@ function App() {
 
   const handleForgotPassword = async (e) => {
     e.preventDefault();
+    if (!supabase) {
+      showToast(t('toastServerUnreachable'), 'error');
+      return;
+    }
     if (!email) {
       showToast(t('toastEnterEmail'), 'error');
       return;
@@ -659,6 +671,10 @@ function App() {
 
   const handleUpdateRecoveryPassword = async (e) => {
     e.preventDefault();
+    if (!supabase) {
+      showToast(t('toastServerUnreachable'), 'error');
+      return;
+    }
     if (!newRecoveryPassword || newRecoveryPassword.length < 6) {
       showToast(t('toastPasswordTooShort'), 'error');
       return;
@@ -679,6 +695,10 @@ function App() {
   };
 
   const handleLogout = async () => {
+    if (!supabase) {
+      showToast(t('toastServerUnreachable'), 'error');
+      return;
+    }
     await supabase.auth.signOut();
     showToast(t('toastLoggedOut'));
   };
