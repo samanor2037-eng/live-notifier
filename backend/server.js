@@ -58,6 +58,29 @@ const supabase = (supabaseUrl && supabaseServiceKey && !supabaseUrl.includes("yo
 app.get('/', (req, res) => {
   res.json({ status: 'ok' });
 });
+app.get('/api/test-streams', async (req, res) => {
+  const { channel_id } = req.query;
+  const url = `https://www.youtube.com/channel/${channel_id}/streams`;
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+    const text = await response.text();
+    res.json({
+      status: response.status,
+      ok: response.ok,
+      length: text.length,
+      snippet: text.slice(0, 500)
+    });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
+
 
 // Route to serve Supabase configuration to frontend
 app.get('/api/config', (req, res) => {
