@@ -590,10 +590,33 @@ app.get('/api/channel-videos', async (req, res) => {
         const entries = Array.isArray(result.feed.entry) ? result.feed.entry : [result.feed.entry];
         entries.forEach(entry => {
           const videoId = entry['yt:videoId'] || entry.id?.replace('yt:video:', '') || '';
-          const isLiveVideo = liveVideoIds.has(videoId);
+          
+          // Heuristic description-based fallback
+          const title = entry.title || '';
+          const descGroup = entry['media:group'] || {};
+          const desc = descGroup['media:description'] || '';
+          
+          const titleLower = title.toLowerCase();
+          const descLower = typeof desc === 'string' ? desc.toLowerCase() : '';
+          
+          const isLiveHeuristic = 
+            titleLower.includes('live') || 
+            titleLower.includes('toos') || 
+            titleLower.includes('stream') ||
+            titleLower.includes('workshop') ||
+            descLower.includes('tonight\'s journey') ||
+            descLower.includes('this stream') ||
+            descLower.includes('live build') ||
+            descLower.includes('workshop notes') ||
+            descLower.includes('end of this workshop') ||
+            (descLower.includes('live') && descLower.includes('around the fire')) ||
+            (descLower.includes('live') && descLower.includes('stream'));
+
+          const isLiveVideo = liveVideoIds.has(videoId) || isLiveHeuristic;
+
           videos.push({
             id: videoId,
-            title: entry.title || 'Muuqaal aan magac lahayn',
+            title: title || 'Muuqaal aan magac lahayn',
             url: entry.link?.$.href || `https://www.youtube.com/watch?v=${videoId}`,
             published: entry.published,
             thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
