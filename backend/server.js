@@ -53,6 +53,12 @@ const supabase = (supabaseUrl && supabaseServiceKey && !supabaseUrl.includes("yo
   ? createClient(supabaseUrl, supabaseServiceKey) 
   : null;
 
+// Health check endpoint (used by Render and uptime pingers to keep the
+// free-tier instance awake so background polling keeps running).
+app.get('/', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
 // Route to serve Supabase configuration to frontend
 app.get('/api/config', (req, res) => {
   res.json({
@@ -170,6 +176,7 @@ async function checkYouTube(channelId) {
   let isLive = false;
   let latestVideoUrl = null;
   let success = false;
+  let liveVideoId = null;
 
   try {
     // 1. YouTube Live Check
@@ -185,6 +192,15 @@ async function checkYouTube(channelId) {
       // Look for indicators that a channel is currently live
       if (html.includes('"isLive":true') || html.includes('"isLiveBroadcast":true')) {
         isLive = true;
+        
+        // Extract live video ID using regex matchers from InitialPlayerResponse or initialData
+        const liveVideoIdMatch = html.match(/"liveStreamabilityRenderer":{"videoId":"([^"]+)"/) || 
+                                 html.match(/"videoDetails":{"videoId":"([^"]+)"/) ||
+                                 html.match(/href="https:\/\/www\.youtube\.com\/watch\?v=([^"]+)"/) ||
+                                 html.match(/<link rel="canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([^"]+)"/);
+        if (liveVideoIdMatch) {
+          liveVideoId = liveVideoIdMatch[1];
+        }
       }
       success = true;
     }
@@ -207,7 +223,7 @@ async function checkYouTube(channelId) {
     console.error(`Error scraping YouTube channel ${channelId}:`, err.message);
   }
 
-  return { success, isLive, latestVideoUrl };
+  return { success, isLive, latestVideoUrl, liveVideoId };
 }
 
 // Scrape TikTok for Live/Video status
@@ -220,8 +236,8 @@ async function checkTikTok(username) {
     const url = `https://www.tiktok.com/@${username}`;
     const response = await fetch(url, {
       headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9'
       }
     });
@@ -328,6 +344,12 @@ async function checkAllChannels() {
       if (checkResult.latestVideoUrl) {
         updateData.last_video_url = checkResult.latestVideoUrl;
       }
+      
+      // If YouTube channel is currently live, set last_video_url to its live watch URL
+      // so the player can embed it as a specific video and enable Player API (timestamps, seek).
+      if (channel.platform === 'youtube' && checkResult.isLive && checkResult.liveVideoId) {
+        updateData.last_video_url = `https://www.youtube.com/watch?v=${checkResult.liveVideoId}`;
+      }
 
       await supabase.from('channels').update(updateData).eq('id', channel.id);
     }
@@ -433,9 +455,225 @@ app.post('/api/send-test-email', async (req, res) => {
   }
 });
 
+// Helper to resolve YouTube channel URL to channel details
+async function resolveYouTubeChannel(url) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch YouTube page: Status ${response.status}`);
+    }
+
+    const html = await response.text();
+
+    // 1. Extract Channel ID
+    let channelId = null;
+    const channelIdMatch = html.match(/<meta itemprop="channelId" content="([^"]+)"/) || 
+                           html.match(/<meta itemprop="identifier" content="([^"]+)"/) ||
+                           html.match(/"channelId":"(UC[^"]+)"/) ||
+                           html.match(/href="https:\/\/www\.youtube\.com\/channel\/(UC[^"]+)"/);
+    if (channelIdMatch) {
+      channelId = channelIdMatch[1];
+    }
+
+    // 2. Extract Name
+    let name = null;
+    const nameMatch = html.match(/<meta property="og:title" content="([^"]+)"/) ||
+                      html.match(/<meta itemprop="name" content="([^"]+)"/) ||
+                      html.match(/<title>([^<]+) - YouTube<\/title>/);
+    if (nameMatch) {
+      name = nameMatch[1];
+    }
+
+    // 3. Extract Avatar (Profile Picture)
+    let avatar = null;
+    const avatarMatch = html.match(/<meta property="og:image" content="([^"]+)"/) ||
+                        html.match(/<link rel="image_src" href="([^"]+)"/);
+    if (avatarMatch) {
+      avatar = avatarMatch[1].replace(/&amp;/g, '&');
+    }
+
+    if (!channelId) {
+      // Check if the URL itself contains the channel ID directly
+      const directMatch = url.match(/\/channel\/(UC[a-zA-Z0-9_-]{22})/);
+      if (directMatch) {
+        channelId = directMatch[1];
+      }
+    }
+
+    if (!channelId) {
+      throw new Error("Could not extract YouTube Channel ID from page.");
+    }
+
+    return {
+      platform: 'youtube',
+      identifier: channelId,
+      name: name || 'YouTube Channel',
+      avatar: avatar
+    };
+  } catch (err) {
+    console.error("resolveYouTubeChannel Error:", err.message);
+    throw err;
+  }
+}
+
+// Helper to resolve TikTok profile URL to channel details
+async function resolveTikTokChannel(url) {
+  try {
+    const match = url.match(/@([a-zA-Z0-9_\.]+)/);
+    if (!match) {
+      throw new Error("Invalid TikTok URL format.");
+    }
+    const username = match[1];
+
+    const response = await fetch(`https://www.tiktok.com/@${username}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+
+    let name = `@${username}`;
+    let avatar = null;
+
+    if (response.ok) {
+      const html = await response.text();
+      const jsonMatch = html.match(/<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application\/json">([\s\S]*?)<\/script>/);
+      if (jsonMatch) {
+        const rawData = JSON.parse(jsonMatch[1]);
+        const userInfo = rawData.__DEFAULT_SCOPE__?.['webapp.user-detail']?.userInfo;
+        if (userInfo) {
+          name = userInfo.user?.nickname || userInfo.user?.uniqueId || name;
+          avatar = userInfo.user?.avatarLarger || userInfo.user?.avatarMedium || userInfo.user?.avatarThumb || null;
+        }
+      }
+    }
+
+    return {
+      platform: 'tiktok',
+      identifier: username,
+      name: name,
+      avatar: avatar
+    };
+  } catch (err) {
+    console.error("resolveTikTokChannel Error:", err.message);
+    throw err;
+  }
+}
+
+// API endpoint to resolve channel details from a URL
+app.post('/api/resolve-channel', async (req, res) => {
+  const { url } = req.body;
+  if (!url) {
+    return res.status(400).json({ success: false, error: "URL is required" });
+  }
+
+  // Normalize URL by adding protocol if missing
+  let normalizedUrl = url.trim();
+  if (!/^https?:\/\//i.test(normalizedUrl)) {
+    normalizedUrl = 'https://' + normalizedUrl;
+  }
+
+  try {
+    let result;
+    if (normalizedUrl.includes('youtube.com') || normalizedUrl.includes('youtu.be')) {
+      result = await resolveYouTubeChannel(normalizedUrl);
+    } else if (normalizedUrl.includes('tiktok.com')) {
+      result = await resolveTikTokChannel(normalizedUrl);
+    } else {
+      return res.status(400).json({ success: false, error: "Unsupported URL. Please enter a YouTube or TikTok channel URL." });
+    }
+    res.json({ success: true, channel: result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API endpoint to fetch all latest videos for a YouTube channel via RSS
+app.get('/api/channel-videos', async (req, res) => {
+  const { channel_id, platform } = req.query;
+  if (!channel_id || !platform) {
+    return res.status(400).json({ error: "Missing required parameters (channel_id, platform)" });
+  }
+
+  try {
+    if (platform === 'youtube') {
+      const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channel_id}`;
+      const response = await fetch(rssUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch YouTube RSS: Status ${response.status}`);
+      }
+      const xml = await response.text();
+      const parser = new xml2js.Parser({ explicitArray: false });
+      const result = await parser.parseStringPromise(xml);
+      
+      const videos = [];
+      if (result.feed && result.feed.entry) {
+        const entries = Array.isArray(result.feed.entry) ? result.feed.entry : [result.feed.entry];
+        entries.forEach(entry => {
+          const videoId = entry['yt:videoId'] || entry.id?.replace('yt:video:', '') || '';
+          videos.push({
+            id: videoId,
+            title: entry.title || 'Muuqaal aan magac lahayn',
+            url: entry.link?.$.href || `https://www.youtube.com/watch?v=${videoId}`,
+            published: entry.published,
+            thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+          });
+        });
+      }
+      res.json({ success: true, videos });
+    } else if (platform === 'tiktok') {
+      // TikTok's creator embed page (www.tiktok.com/embed/@user) server-renders the
+      // user's latest ~10 videos inside the __FRONTITY_CONNECT_STATE__ JSON blob.
+      // The regular profile page no longer includes the video list in its HTML.
+      const response = await fetch(`https://www.tiktok.com/embed/@${channel_id}?lang=en-US`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9'
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`TikTok returned status ${response.status} for @${channel_id}`);
+      }
+      const html = await response.text();
+      const jsonMatch = html.match(/<script id="__FRONTITY_CONNECT_STATE__" type="application\/json">([\s\S]*?)<\/script>/);
+      const videos = [];
+      if (jsonMatch) {
+        const state = JSON.parse(jsonMatch[1]);
+        // videoList sits under source.data["/embed/@<user>?..."]; the key varies, so scan the values.
+        const dataEntries = Object.values(state.source?.data || {});
+        const entry = dataEntries.find(e => e && Array.isArray(e.videoList));
+        (entry?.videoList || []).forEach(item => {
+          if (!item || !item.id) return;
+          videos.push({
+            id: item.id,
+            title: item.desc || 'Muuqaal aan magac lahayn',
+            url: `https://www.tiktok.com/@${channel_id}/video/${item.id}`,
+            published: null,
+            thumbnail: item.coverUrl || item.originCoverUrl || item.dynamicCoverUrl || null
+          });
+        });
+      }
+      res.json({ success: true, videos });
+    } else {
+      res.json({ success: true, videos: [] });
+    }
+  } catch (err) {
+    console.error("channel-videos API Error:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Start Background Polling Interval
 (async () => {
-  let intervalMs = 300000; // 5 minutes default
+  let intervalMs = 5000; // 5 seconds default
   
   if (supabase) {
     try {

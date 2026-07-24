@@ -18,5 +18,5 @@ CREATE TABLE IF NOT EXISTS settings (
 
 -- Insert initial polling interval setting
 INSERT INTO settings (key, value)
-VALUES ('app_config', '{"poll_interval_seconds": 300}')
+VALUES ('app_config', '{"poll_interval_seconds": 5}')
 ON CONFLICT (key) DO NOTHING;
