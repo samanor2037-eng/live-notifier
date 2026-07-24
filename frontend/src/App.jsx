@@ -279,7 +279,10 @@ function App() {
   const [avatarErrors, setAvatarErrors] = useState({});
 
   const prevActivePlayerRef = useRef(null);
+  const activeChannelIdRef = useRef(null);
+
   useEffect(() => {
+    activeChannelIdRef.current = activePlayer?.channel?.id || null;
     if (activePlayer && !prevActivePlayerRef.current) {
       if (activePlayer.type === 'video' && activePlayer.channel.platform === 'youtube') {
         setActiveTabInModal('playlist');
@@ -1091,6 +1094,9 @@ function App() {
       const res = await fetch(`${API_URL}/api/channel-videos?channel_id=${identifier}&platform=${platform}`);
       const data = await res.json();
       if (data.success) {
+        // Guard against race conditions
+        if (activeChannelIdRef.current !== channelId) return;
+
         const fetched = data.videos || [];
         setChannelVideos(prev => {
           const fetchedIds = new Set(fetched.map(v => v.id));
@@ -1103,7 +1109,9 @@ function App() {
     } catch (err) {
       console.error("Error fetching channel videos:", err.message);
     } finally {
-      setIsLoadingVideos(false);
+      if (activeChannelIdRef.current === channelId) {
+        setIsLoadingVideos(false);
+      }
     }
   };
 
