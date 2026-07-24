@@ -2150,6 +2150,47 @@ function App() {
                     </div>
                   ) : (
                     <div className={`videos-grid${activePlayer.channel.platform === 'tiktok' ? ' tiktok' : ''}`}>
+                      {/* Active Live Stream Card */}
+                      {activePlayer.channel.is_live && (
+                        <div 
+                          className="grid-video-card live-card animate-pulse"
+                          style={{ borderColor: 'var(--primary-red)', boxShadow: '0 0 15px rgba(255, 59, 48, 0.25)' }}
+                          onClick={() => {
+                            setActivePlayer(prev => ({
+                              ...prev,
+                              type: 'live',
+                              videoId: activePlayer.channel.platform === 'youtube' ? activePlayer.channel.identifier : null
+                            }));
+                          }}
+                        >
+                          <div className="grid-video-thumbnail-wrapper" style={{ background: '#110002' }}>
+                            {activePlayer.channel.avatar_url ? (
+                              <img 
+                                src={activePlayer.channel.avatar_url} 
+                                alt={activePlayer.channel.name} 
+                                className="grid-video-thumbnail"
+                                style={{ filter: 'brightness(0.8)' }}
+                              />
+                            ) : null}
+                            <div style={{ position: 'absolute', top: '12px', left: '12px', display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--primary-red)', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', zIndex: 10 }}>
+                              <span className="live-pulse" style={{ width: '6px', height: '6px', background: 'white', borderRadius: '50%', display: 'inline-block' }}></span>
+                              {t('watchLive').toUpperCase()}
+                            </div>
+                            <div className="grid-video-fallback" style={{ display: activePlayer.channel.avatar_url ? 'none' : 'flex', color: 'var(--primary-red)' }}>
+                              <Play size={28} />
+                            </div>
+                          </div>
+                          <div className="grid-video-info" style={{ borderTop: '1px solid rgba(255, 59, 48, 0.15)' }}>
+                            <h4 className="grid-video-title" style={{ color: 'var(--primary-red)', fontWeight: 'bold' }}>
+                              🔴 LIVE: {activePlayer.channel.name}
+                            </h4>
+                            <span className="grid-video-date" style={{ color: 'var(--primary-red)', fontWeight: '500' }}>
+                              {t('liveNow') || 'Toos u socda'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
                       {channelVideos.map((video) => (
                         <div 
                           key={video.id} 
@@ -2157,6 +2198,7 @@ function App() {
                           onClick={() => {
                             setActivePlayer(prev => ({
                               ...prev,
+                              type: 'video',
                               videoId: video.id
                             }));
                           }}
@@ -2176,6 +2218,11 @@ function App() {
                                 }}
                               />
                             ) : null}
+                            {video.title && (video.title.toLowerCase().includes('live') || video.title.toLowerCase().includes('toos') || video.title.toLowerCase().includes('stream')) && (
+                              <div style={{ position: 'absolute', top: '8px', right: '8px', background: 'var(--primary-red)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 'bold', zIndex: 5, letterSpacing: '0.5px', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
+                                LIVE
+                              </div>
+                            )}
                             <div className="grid-video-fallback" style={{ display: video.thumbnail ? 'none' : 'flex' }}>
                               <Youtube size={28} />
                             </div>
@@ -2569,6 +2616,63 @@ function App() {
                               </div>
                             ) : (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                {/* Active Live Stream Item in Sidebar Playlist */}
+                                {activePlayer.channel.is_live && (
+                                  <div 
+                                    className="playlist-video-item live-playlist-item"
+                                    onClick={() => {
+                                      setActivePlayer(prev => ({
+                                        ...prev,
+                                        type: 'live',
+                                        videoId: activePlayer.channel.platform === 'youtube' ? activePlayer.channel.identifier : null
+                                      }));
+                                    }}
+                                    style={{
+                                      display: 'flex',
+                                      gap: '10px',
+                                      background: activePlayer.type === 'live' ? 'rgba(255, 59, 48, 0.15)' : 'rgba(255, 59, 48, 0.03)',
+                                      border: activePlayer.type === 'live' ? '1px solid var(--primary-red)' : '1px solid rgba(255, 59, 48, 0.2)',
+                                      borderRadius: '8px',
+                                      padding: '8px',
+                                      cursor: 'pointer',
+                                      transition: 'all 0.2s',
+                                      boxShadow: activePlayer.type === 'live' ? '0 0 10px rgba(255, 59, 48, 0.15)' : 'none'
+                                    }}
+                                  >
+                                    {activePlayer.channel.avatar_url ? (
+                                      <div style={{ position: 'relative', width: '80px', height: '45px', borderRadius: '4px', overflow: 'hidden' }}>
+                                        <img 
+                                          src={activePlayer.channel.avatar_url} 
+                                          alt="LIVE" 
+                                          style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'brightness(0.7)' }}
+                                        />
+                                        <span style={{ position: 'absolute', bottom: '2px', right: '2px', background: 'var(--primary-red)', color: 'white', fontSize: '0.55rem', fontWeight: 'bold', padding: '1px 3px', borderRadius: '2px' }}>
+                                          LIVE
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <div style={{ width: '80px', height: '45px', borderRadius: '4px', background: '#110002', border: '1px solid rgba(255, 59, 48, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-red)' }}>
+                                        <Play size={16} />
+                                      </div>
+                                    )}
+                                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                      <div style={{
+                                        fontSize: '0.8rem',
+                                        fontWeight: 700,
+                                        color: 'var(--primary-red)',
+                                        textOverflow: 'ellipsis',
+                                        overflow: 'hidden',
+                                        whiteSpace: 'nowrap'
+                                      }}>
+                                        🔴 Toos: {activePlayer.channel.name}
+                                      </div>
+                                      <div style={{ fontSize: '0.65rem', color: 'var(--primary-red)', marginTop: '2px', fontWeight: '500' }}>
+                                        {t('liveNow') || 'Toos u socda'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
                                 {channelVideos.map((video) => (
                                   <div 
                                     key={video.id} 
@@ -2584,8 +2688,8 @@ function App() {
                                     style={{
                                       display: 'flex',
                                       gap: '10px',
-                                      background: activePlayer.videoId === video.id ? 'rgba(255, 59, 48, 0.08)' : 'rgba(255,255,255,0.01)',
-                                      border: activePlayer.videoId === video.id ? '1px solid rgba(255, 59, 48, 0.3)' : '1px solid var(--card-border)',
+                                      background: activePlayer.type === 'video' && activePlayer.videoId === video.id ? 'rgba(255, 59, 48, 0.08)' : 'rgba(255,255,255,0.01)',
+                                      border: activePlayer.type === 'video' && activePlayer.videoId === video.id ? '1px solid rgba(255, 59, 48, 0.3)' : '1px solid var(--card-border)',
                                       borderRadius: '8px',
                                       padding: '8px',
                                       cursor: 'pointer',
@@ -2593,16 +2697,23 @@ function App() {
                                     }}
                                   >
                                     {video.thumbnail ? (
-                                      <img 
-                                        src={video.thumbnail} 
-                                        alt={video.title} 
-                                        style={{ width: '80px', height: '45px', borderRadius: '4px', objectFit: 'cover' }}
-                                        onError={(e) => {
-                                          e.target.style.display = 'none';
-                                          const fallback = e.target.parentNode.querySelector('.video-thumb-fallback');
-                                          if (fallback) fallback.style.display = 'flex';
-                                        }}
-                                      />
+                                      <div style={{ position: 'relative', width: '80px', height: '45px', borderRadius: '4px', overflow: 'hidden' }}>
+                                        <img 
+                                          src={video.thumbnail} 
+                                          alt={video.title} 
+                                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                          onError={(e) => {
+                                            e.target.style.display = 'none';
+                                            const fallback = e.target.parentNode.querySelector('.video-thumb-fallback');
+                                            if (fallback) fallback.style.display = 'flex';
+                                          }}
+                                        />
+                                        {video.title && (video.title.toLowerCase().includes('live') || video.title.toLowerCase().includes('toos') || video.title.toLowerCase().includes('stream')) && (
+                                          <span style={{ position: 'absolute', top: '2px', right: '2px', background: 'var(--primary-red)', color: 'white', fontSize: '0.5rem', fontWeight: 'bold', padding: '1px 3px', borderRadius: '2px', zIndex: 5 }}>
+                                            LIVE
+                                          </span>
+                                        )}
+                                      </div>
                                     ) : null}
                                     <div 
                                       className="video-thumb-fallback"
