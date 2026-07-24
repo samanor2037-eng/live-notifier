@@ -2464,7 +2464,7 @@ function App() {
                             {t('noVideosFound')}
                           </div>
                         ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '12px' }}>
                             {channelVideos.map((video) => (
                               <div 
                                 key={video.id} 
@@ -2479,20 +2479,22 @@ function App() {
                                 }}
                                 style={{
                                   display: 'flex',
-                                  gap: '10px',
-                                  background: activePlayer.videoId === video.id ? 'rgba(255, 59, 48, 0.08)' : 'rgba(255,255,255,0.01)',
-                                  border: activePlayer.videoId === video.id ? '1px solid rgba(255, 59, 48, 0.3)' : '1px solid var(--card-border)',
-                                  borderRadius: '8px',
+                                  flexDirection: 'column',
+                                  gap: '8px',
+                                  background: activePlayer.videoId === video.id ? 'rgba(94, 23, 245, 0.08)' : 'rgba(255,255,255,0.02)',
+                                  border: activePlayer.videoId === video.id ? '1px solid var(--accent-primary)' : '1px solid var(--card-border)',
+                                  borderRadius: '10px',
                                   padding: '8px',
                                   cursor: 'pointer',
-                                  transition: 'all 0.2s'
+                                  transition: 'all 0.2s',
+                                  overflow: 'hidden'
                                 }}
                               >
                                 {video.thumbnail ? (
                                   <img 
                                     src={video.thumbnail} 
                                     alt={video.title} 
-                                    style={{ width: '80px', height: '45px', borderRadius: '4px', objectFit: 'cover' }}
+                                    style={{ width: '100%', aspectRatio: '16/9', borderRadius: '6px', objectFit: 'cover' }}
                                     onError={(e) => {
                                       e.target.style.display = 'none';
                                       const fallback = e.target.parentNode.querySelector('.video-thumb-fallback');
@@ -2503,9 +2505,9 @@ function App() {
                                 <div 
                                   className="video-thumb-fallback"
                                   style={{ 
-                                    width: '80px', 
-                                    height: '45px', 
-                                    borderRadius: '4px', 
+                                    width: '100%', 
+                                    aspectRatio: '16/9', 
+                                    borderRadius: '6px', 
                                     background: 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%)', 
                                     border: '1px solid var(--card-border)',
                                     display: video.thumbnail ? 'none' : 'flex', 
@@ -2518,9 +2520,9 @@ function App() {
                                 >
                                   {activePlayer.channel.platform === 'tiktok' ? 'TIKTOK' : 'VIDEO'}
                                 </div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                                   <div style={{
-                                    fontSize: '0.8rem',
+                                    fontSize: '0.75rem',
                                     fontWeight: 700,
                                     color: activePlayer.videoId === video.id ? 'white' : 'var(--text-white)',
                                     textOverflow: 'ellipsis',
@@ -2532,7 +2534,7 @@ function App() {
                                   }}>
                                     {video.title}
                                   </div>
-                                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                  <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: 'auto', paddingTop: '4px' }}>
                                     {video.published ? new Date(video.published).toLocaleDateString() : ''}
                                   </div>
                                 </div>
