@@ -162,6 +162,7 @@ async function checkYouTube(channelId) {
   let latestVideoUrl = null;
   let success = false;
   let liveVideoId = null;
+  let avatar = null;
 
   try {
     // 1. YouTube Live Check
@@ -174,6 +175,13 @@ async function checkYouTube(channelId) {
     
     if (response.ok) {
       const html = await response.text();
+      // Extract avatar
+      const avatarMatch = html.match(/<meta property="og:image" content="([^"]+)"/) ||
+                          html.match(/<link rel="image_src" href="([^"]+)"/);
+      if (avatarMatch) {
+        avatar = avatarMatch[1].replace(/&amp;/g, '&');
+      }
+
       // Look for indicators that a channel is currently live
       if (html.includes('"isLive":true') || html.includes('"isLiveBroadcast":true')) {
         isLive = true;
@@ -208,7 +216,7 @@ async function checkYouTube(channelId) {
     console.error(`Error scraping YouTube channel ${channelId}:`, err.message);
   }
 
-  return { success, isLive, latestVideoUrl, liveVideoId };
+  return { success, isLive, latestVideoUrl, liveVideoId, avatar };
 }
 
 // Scrape TikTok for Live/Video status
@@ -216,6 +224,7 @@ async function checkTikTok(username) {
   let isLive = false;
   let latestVideoUrl = null;
   let success = false;
+  let avatar = null;
 
   try {
     const url = `https://www.tiktok.com/@${username}`;
@@ -229,6 +238,13 @@ async function checkTikTok(username) {
 
     if (response.ok) {
       const html = await response.text();
+      // Extract avatar fallback from HTML meta
+      const avatarMatch = html.match(/<meta property="og:image" content="([^"]+)"/) ||
+                          html.match(/<link rel="image_src" href="([^"]+)"/);
+      if (avatarMatch) {
+        avatar = avatarMatch[1].replace(/&amp;/g, '&');
+      }
+
       // Try parsing Universal Rehydration data
       const jsonMatch = html.match(/<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application\/json">([\s\S]*?)<\/script>/);
       if (jsonMatch) {
@@ -239,6 +255,7 @@ async function checkTikTok(username) {
         if (userInfo) {
           success = true;
           isLive = userInfo.user?.rooms?.length > 0 || userInfo.user?.inRoom === true || !!userInfo.user?.roomId;
+          avatar = userInfo.user?.avatarLarger || userInfo.user?.avatarMedium || userInfo.user?.avatarThumb || avatar || null;
           
           const itemList = userDetail?.itemList;
           if (itemList && itemList.length > 0) {
@@ -260,7 +277,7 @@ async function checkTikTok(username) {
     console.error(`Error scraping TikTok user ${username}:`, err.message);
   }
 
-  return { success, isLive, latestVideoUrl };
+  return { success, isLive, latestVideoUrl, avatar };
 }
 
 // Function to poll and update all channels
@@ -300,7 +317,34 @@ async function checkAllChannels() {
           try {
             const { data: userData } = await supabase.auth.admin.getUserById(channel.user_id);
             if (userData && userData.user) {
-              targetEmail = userData.user.email;
+              const userMetadata = userData.user.user_metadata || {};
+              const emailEnabled = userMetadata.email_notifications !== false;
+              if (emailEnabled) {
+                // Check granular email preferences
+                const emailYtEnabled = userMetadata.email_yt_enabled !== false;
+                const emailTtEnabled = userMetadata.email_tt_enabled !== false;
+                const emailYtLive = userMetadata.email_yt_live !== false;
+                const emailYtUpload = userMetadata.email_yt_upload !== false;
+                const emailTtLive = userMetadata.email_tt_live !== false;
+                const emailTtUpload = userMetadata.email_tt_upload !== false;
+
+                let shouldSend = false;
+                if (channel.platform === 'youtube' && emailYtEnabled) {
+                  if (liveStatusChanged && emailYtLive) shouldSend = true;
+                  if (newVideoUploaded && emailYtUpload) shouldSend = true;
+                } else if (channel.platform === 'tiktok' && emailTtEnabled) {
+                  if (liveStatusChanged && emailTtLive) shouldSend = true;
+                  if (newVideoUploaded && emailTtUpload) shouldSend = true;
+                }
+
+                if (shouldSend) {
+                  targetEmail = userData.user.email;
+                } else {
+                  console.log(`Email filters did not match for user ${channel.user_id} on ${channel.platform}. Skipping email.`);
+                }
+              } else {
+                console.log(`Email notifications disabled for user ${channel.user_id}. Skipping email.`);
+              }
             }
           } catch (err) {
             console.error(`Failed to get email for user ${channel.user_id}:`, err.message);
@@ -319,6 +363,9 @@ async function checkAllChannels() {
       };
       if (checkResult.latestVideoUrl) {
         updateData.last_video_url = checkResult.latestVideoUrl;
+      }
+      if (checkResult.avatar) {
+        updateData.avatar_url = checkResult.avatar;
       }
       
       // If YouTube channel is currently live, set last_video_url to its live watch URL
@@ -395,6 +442,49 @@ app.post('/api/send-test-email', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+const durationCache = {};
+
+function formatDuration(seconds) {
+  if (!seconds) return '';
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  
+  if (hrs > 0) {
+    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+async function getYouTubeVideoDuration(videoId) {
+  if (!videoId) return null;
+  if (durationCache[videoId]) {
+    return durationCache[videoId];
+  }
+  
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const match = html.match(/"lengthSeconds":"(\d+)"/);
+    if (match) {
+      const seconds = parseInt(match[1], 10);
+      const formatted = formatDuration(seconds);
+      durationCache[videoId] = formatted;
+      return formatted;
+    }
+  } catch (err) {
+    console.error(`Error fetching duration for video ${videoId}:`, err.message);
+  }
+  return null;
+}
 
 // Helper to resolve YouTube channel URL to channel details
 async function resolveYouTubeChannel(url) {
@@ -623,6 +713,16 @@ app.get('/api/channel-videos', async (req, res) => {
             is_live: isLiveVideo
           });
         });
+
+        // Fetch YouTube video durations concurrently
+        await Promise.all(
+          videos.map(async (video) => {
+            const duration = await getYouTubeVideoDuration(video.id);
+            if (duration) {
+              video.duration = duration;
+            }
+          })
+        );
       }
       res.json({ success: true, videos });
     } else if (platform === 'tiktok') {

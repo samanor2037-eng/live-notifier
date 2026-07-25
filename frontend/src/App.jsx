@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import {
-  Bell, BellOff, Settings, Users, Video, Plus, Trash2,
+  Bell, BellOff, Settings, Home, Video, Plus, Trash2,
   Mail, Shield, RefreshCw, AlertCircle, Youtube, CheckCircle2, Play,
   Eye, EyeOff, ListVideo, GripVertical, Maximize, Minimize,
   Sun, Moon, LogOut, User, ChevronDown, Music2, Volume2, VolumeX,
@@ -13,40 +13,69 @@ import {
 const TIKTOK_IFRAME_ALLOW = 'unload *; accelerometer *; gyroscope *; camera *; microphone *; magnetometer *; autoplay *; encrypted-media *; picture-in-picture *; web-share *';
 
 // Synthesize a beautiful soft chime sound using Web Audio API
-function playChime() {
+function playChime(toneType = null) {
   try {
+    const selectedTone = toneType || localStorage.getItem('veonotes_alarm_tone') || 'chime';
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     
-    // First note (D5)
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(587.33, ctx.currentTime); 
-    gain1.gain.setValueAtTime(0, ctx.currentTime);
-    gain1.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
-    gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-    osc1.start(ctx.currentTime);
-    osc1.stop(ctx.currentTime + 0.45);
+    if (selectedTone === 'ping') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1046.50, ctx.currentTime); // C6
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.3);
+    } else if (selectedTone === 'melody') {
+      const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+      notes.forEach((freq, idx) => {
+        const time = ctx.currentTime + idx * 0.08;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, time);
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.12, time + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+        osc.start(time);
+        osc.stop(time + 0.35);
+      });
+    } else {
+      // Default Chime
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(587.33, ctx.currentTime); 
+      gain1.gain.setValueAtTime(0, ctx.currentTime);
+      gain1.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
+      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc1.start(ctx.currentTime);
+      osc1.stop(ctx.currentTime + 0.45);
 
-    // Second note (A5) slightly delayed
-    setTimeout(() => {
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(880, ctx.currentTime); 
-      gain2.gain.setValueAtTime(0, ctx.currentTime);
-      gain2.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
-      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-      osc2.start(ctx.currentTime);
-      osc2.stop(ctx.currentTime + 0.45);
-    }, 120);
-
-  } catch (err) {
-    console.error('Failed to play chime:', err);
+      setTimeout(() => {
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(880, ctx.currentTime); 
+        gain2.gain.setValueAtTime(0, ctx.currentTime);
+        gain2.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
+        gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc2.start(ctx.currentTime);
+        osc2.stop(ctx.currentTime + 0.45);
+      }, 100);
+    }
+  } catch (e) {
+    console.error("Audio error:", e);
   }
 }
 
@@ -85,12 +114,12 @@ const translations = {
 
   appSubtitle: { so: 'La soco marka qof aad rabto uu Live galo ama muuqaal cusub soo dhigo YouTube & TikTok', en: 'Track when someone you follow goes live or uploads on YouTube & TikTok' },
   checkNow: { so: 'Hubi Hadda', en: 'Check Now' },
-  soundLabel: { so: 'Dhawaaq', en: 'Sound' },
-  pushAlert: { so: 'Push Alert', en: 'Push Alert' },
+  soundLabel: { so: 'Dhawaaq (Codka ogeysiiska marka kanalku toos u galo ama muuqaal cusub la soo geliyo)', en: 'Sound Alerts (Chime sound when a channel goes live or uploads a video)' },
+  pushAlert: { so: 'Ogeysiiska Browser-ka (Daar/Dami ogeysiisyada desktop-ka)', en: 'Browser Notifications (Toggle desktop push alerts for new updates)' },
   loggedInAs: { so: 'Wuxuu u furan yahay:', en: 'Signed in as:' },
   logOut: { so: 'Ka Bax (Log Out)', en: 'Log Out' },
 
-  tabDashboard: { so: 'Dashboard', en: 'Dashboard' },
+  tabDashboard: { so: 'Hoy', en: 'Home' },
   tabAddChannel: { so: 'Ku dar Kanaal', en: 'Add Channel' },
   tabSettings: { so: 'Settings', en: 'Settings' },
 
@@ -195,6 +224,30 @@ const translations = {
   fallbackTiktokText: { so: 'Soo dejinaya liiska...', en: 'Loading playlist...' },
 };
 
+function durationStringToSeconds(str) {
+  if (!str) return 0;
+  const parts = str.split(':').map(Number);
+  if (parts.some(isNaN)) return 0;
+  if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  } else if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  }
+  return 0;
+}
+
+function formatDuration(seconds) {
+  if (!seconds) return '0:00';
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  
+  if (hrs > 0) {
+    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [supabase, setSupabase] = useState(null);
@@ -204,6 +257,29 @@ function App() {
     { id: '3', platform: 'tiktok', identifier: 'teammk3021', name: 'MrKHAN x DADDY302', is_live: false, last_checked: new Date().toISOString(), last_video_url: null, avatar_url: null },
   ]);
   const [isEmailConfigured, setIsEmailConfigured] = useState(false);
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
+  const pollIntervalTime = 5000;
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
+  
+  // Granular Desktop Notification Preferences (YouTube/TikTok Live/Upload combinations)
+  const [desktopYtEnabled, setDesktopYtEnabled] = useState(() => localStorage.getItem('veonotes_desktop_yt_enabled') !== 'false');
+  const [desktopTtEnabled, setDesktopTtEnabled] = useState(() => localStorage.getItem('veonotes_desktop_tt_enabled') !== 'false');
+  const [desktopYtLive, setDesktopYtLive] = useState(() => localStorage.getItem('veonotes_desktop_yt_live') !== 'false');
+  const [desktopYtUpload, setDesktopYtUpload] = useState(() => localStorage.getItem('veonotes_desktop_yt_upload') !== 'false');
+  const [desktopTtLive, setDesktopTtLive] = useState(() => localStorage.getItem('veonotes_desktop_tt_live') !== 'false');
+  const [desktopTtUpload, setDesktopTtUpload] = useState(() => localStorage.getItem('veonotes_desktop_tt_upload') !== 'false');
+
+  // Granular Email Notification Preferences (YouTube/TikTok Live/Upload combinations)
+  const [emailYtEnabled, setEmailYtEnabled] = useState(true);
+  const [emailTtEnabled, setEmailTtEnabled] = useState(true);
+  const [emailYtLive, setEmailYtLive] = useState(true);
+  const [emailYtUpload, setEmailYtUpload] = useState(true);
+  const [emailTtLive, setEmailTtLive] = useState(true);
+  const [emailTtUpload, setEmailTtUpload] = useState(true);
+
+  const [alarmTone, setAlarmTone] = useState(() => {
+    return localStorage.getItem('veonotes_alarm_tone') || 'chime';
+  });
   
   // Form fields
   const [newChannel, setNewChannel] = useState({
@@ -218,6 +294,10 @@ function App() {
   const [toast, setToast] = useState(null);
   const [isConfigured, setIsConfigured] = useState(false);
   const [theme, setTheme] = useState(() => {
+    try {
+      const stored = localStorage.getItem('veonotes-theme');
+      if (stored) return stored;
+    } catch (e) {}
     if (typeof document !== 'undefined') {
       const attr = document.documentElement.getAttribute('data-theme');
       if (attr) return attr;
@@ -237,6 +317,76 @@ function App() {
 
   // Track previous live states to trigger notifications on transition
   const prevLiveStatesRef = useRef({});
+  const prevVideoUrlsRef = useRef({});
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationsRef = useRef(null);
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      const saved = localStorage.getItem('veonotes_notifications');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const addNotification = (notif) => {
+    setNotifications(prev => {
+      const filtered = prev.filter(n => !(n.channelId === notif.channelId && n.type === notif.type && n.url === notif.url));
+      const updated = [notif, ...filtered].slice(0, 50);
+      localStorage.setItem('veonotes_notifications', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const toggleNotifications = () => {
+    setShowNotifications(prev => !prev);
+    if (!showNotifications) {
+      // Mark all as read when opening the menu
+      setNotifications(prev => {
+        const updated = prev.map(n => ({ ...n, read: true }));
+        localStorage.setItem('veonotes_notifications', JSON.stringify(updated));
+        return updated;
+      });
+    }
+  };
+
+  const handleNotificationClick = (notif) => {
+    setShowNotifications(false);
+    
+    // Find the corresponding channel in the channels list
+    const channel = channels.find(c => c.id === notif.channelId);
+    if (!channel) {
+      window.open(notif.url, '_blank');
+      return;
+    }
+    
+    let playerType = notif.type === 'live' ? 'live' : 'video';
+    let videoId = null;
+    
+    if (notif.type === 'live') {
+      if (channel.platform === 'youtube') {
+        const ytMatch = channel.last_video_url ? channel.last_video_url.match(/(?:v=|\/embed\/|\/watch\?v=)([a-zA-Z0-9_-]{11})/) : null;
+        videoId = ytMatch ? ytMatch[1] : channel.identifier;
+      }
+    } else {
+      // Upload: extract video ID
+      if (channel.platform === 'youtube') {
+        const ytMatch = notif.url.match(/(?:v=|\/embed\/|\/watch\?v=)([a-zA-Z0-9_-]{11})/);
+        videoId = ytMatch ? ytMatch[1] : null;
+      } else if (channel.platform === 'tiktok') {
+        const ttMatch = notif.url.match(/\/video\/(\d+)/);
+        videoId = ttMatch ? ttMatch[1] : null;
+      }
+    }
+    
+    const playerObj = {
+      channel: channel,
+      type: playerType,
+      videoId: videoId
+    };
+    
+    setActivePlayer(playerObj);
+  };
 
   const [session, setSession] = useState(null);
   const [email, setEmail] = useState('');
@@ -264,7 +414,9 @@ function App() {
   const [channelVideos, setChannelVideos] = useState([]);
   const [activeTabInModal, setActiveTabInModal] = useState('notes'); // 'notes' | 'playlist'
   const [isLoadingVideos, setIsLoadingVideos] = useState(false);
+  const [playlistSearchQuery, setPlaylistSearchQuery] = useState('');
   const [tiktokInputUrl, setTiktokInputUrl] = useState('');
+  const [modalSidebarOpen, setModalSidebarOpen] = useState(false);
   
   // Draggable & Fullscreen states
   const [overlayPos, setOverlayPos] = useState({ x: 20, y: 20 });
@@ -277,6 +429,117 @@ function App() {
   const lastPlayerTimeRef = useRef(0);
   const lastPlayTimeRef = useRef({ playerTime: 0, wallTime: 0 });
   const [avatarErrors, setAvatarErrors] = useState({});
+  const [videoProgress, setVideoProgress] = useState({});
+
+  useEffect(() => {
+    if (channelVideos.length > 0) {
+      const progressMap = {};
+      channelVideos.forEach(video => {
+        try {
+          const saved = localStorage.getItem(`veonotes_progress_${video.id}`);
+          if (saved) {
+            progressMap[video.id] = parseFloat(saved);
+          }
+        } catch (e) {}
+      });
+      setVideoProgress(progressMap);
+    }
+  }, [channelVideos]);
+
+  const updateContinueWatching = useCallback((videoId, curTime) => {
+    if (!activePlayer || !activePlayer.videoId || activePlayer.videoId !== videoId) return;
+    
+    try {
+      const stored = localStorage.getItem('veonotes_continue_watching');
+      let list = stored ? JSON.parse(stored) : [];
+      if (!Array.isArray(list)) list = [];
+
+      const existing = list.find(item => item.id === videoId);
+      const video = channelVideos.find(v => v.id === videoId);
+      
+      if (!video && !existing) return;
+
+      const title = video ? video.title : existing.title;
+      const thumbnail = video ? video.thumbnail : existing.thumbnail;
+      const duration = video ? video.duration : existing.duration;
+
+      list = list.filter(item => item.id !== videoId);
+
+      const total = durationStringToSeconds(duration);
+      if (curTime > 0 && total > 0 && total - curTime > 5) {
+        list.unshift({
+          id: videoId,
+          title,
+          thumbnail,
+          duration,
+          platform: activePlayer.channel.platform,
+          channelId: activePlayer.channel.id,
+          channelName: activePlayer.channel.name,
+          channelAvatar: activePlayer.channel.avatar_url,
+          channelIdentifier: activePlayer.channel.identifier,
+          progress: curTime,
+          lastWatched: Date.now()
+        });
+      }
+
+      if (list.length > 50) {
+        list = list.slice(0, 50);
+      }
+
+      localStorage.setItem('veonotes_continue_watching', JSON.stringify(list));
+    } catch (e) {
+      console.error("Failed to update continue watching list:", e);
+    }
+  }, [activePlayer, channelVideos]);
+
+  useEffect(() => {
+    if (activePlayer && activePlayer.videoId && activePlayer.type === 'video') {
+      const videoId = activePlayer.videoId;
+      const video = channelVideos.find(v => v.id === videoId);
+      if (!video) return;
+
+      try {
+        const stored = localStorage.getItem('veonotes_continue_watching');
+        let list = stored ? JSON.parse(stored) : [];
+        if (!Array.isArray(list)) list = [];
+
+        const existing = list.find(item => item.id === videoId);
+        
+        if (!existing) {
+          const savedProgress = localStorage.getItem(`veonotes_progress_${videoId}`);
+          const curProgress = savedProgress ? parseFloat(savedProgress) : 0;
+          
+          list.unshift({
+            id: videoId,
+            title: video.title,
+            thumbnail: video.thumbnail,
+            duration: video.duration,
+            platform: activePlayer.channel.platform,
+            channelId: activePlayer.channel.id,
+            channelName: activePlayer.channel.name,
+            channelAvatar: activePlayer.channel.avatar_url,
+            channelIdentifier: activePlayer.channel.identifier,
+            progress: curProgress,
+            lastWatched: Date.now()
+          });
+
+          if (list.length > 50) {
+            list = list.slice(0, 50);
+          }
+          localStorage.setItem('veonotes_continue_watching', JSON.stringify(list));
+        } else {
+          list = list.filter(item => item.id !== videoId);
+          list.unshift({
+            ...existing,
+            lastWatched: Date.now()
+          });
+          localStorage.setItem('veonotes_continue_watching', JSON.stringify(list));
+        }
+      } catch (e) {
+        console.error("Error setting initial continue watching:", e);
+      }
+    }
+  }, [activePlayer?.videoId, activePlayer?.type, channelVideos]);
 
   const prevActivePlayerRef = useRef(null);
   const activeChannelIdRef = useRef(null);
@@ -488,6 +751,84 @@ function App() {
     return () => subscription.unsubscribe();
   }, [supabase]);
 
+  // Sync email notification setting with user metadata
+  useEffect(() => {
+    if (session && session.user) {
+      const userMetadata = session.user.user_metadata || {};
+      setEmailNotificationsEnabled(userMetadata.email_notifications !== false);
+      setEmailYtEnabled(userMetadata.email_yt_enabled !== false);
+      setEmailTtEnabled(userMetadata.email_tt_enabled !== false);
+      setEmailYtLive(userMetadata.email_yt_live !== false);
+      setEmailYtUpload(userMetadata.email_yt_upload !== false);
+      setEmailTtLive(userMetadata.email_tt_live !== false);
+      setEmailTtUpload(userMetadata.email_tt_upload !== false);
+    }
+  }, [session]);
+
+  const handleToggleEmailNotifications = async (val) => {
+    try {
+      setEmailNotificationsEnabled(val);
+      const { error } = await supabase.auth.updateUser({
+        data: { email_notifications: val }
+      });
+      if (error) throw error;
+      showToast(
+        language === 'so' 
+          ? `Ogeysiisyada iimaylka waa la ${val ? 'shiday' : 'damiyay'}` 
+          : `Email notifications ${val ? 'enabled' : 'disabled'}`, 
+        'success'
+      );
+    } catch (err) {
+      showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
+    }
+  };
+
+  const handleUpdateDesktopPref = (key, val) => {
+    if (key === 'yt_enabled') {
+      setDesktopYtEnabled(val);
+      localStorage.setItem('veonotes_desktop_yt_enabled', val.toString());
+    }
+    if (key === 'tt_enabled') {
+      setDesktopTtEnabled(val);
+      localStorage.setItem('veonotes_desktop_tt_enabled', val.toString());
+    }
+    if (key === 'yt_live') {
+      setDesktopYtLive(val);
+      localStorage.setItem('veonotes_desktop_yt_live', val.toString());
+    }
+    if (key === 'yt_upload') {
+      setDesktopYtUpload(val);
+      localStorage.setItem('veonotes_desktop_yt_upload', val.toString());
+    }
+    if (key === 'tt_live') {
+      setDesktopTtLive(val);
+      localStorage.setItem('veonotes_desktop_tt_live', val.toString());
+    }
+    if (key === 'tt_upload') {
+      setDesktopTtUpload(val);
+      localStorage.setItem('veonotes_desktop_tt_upload', val.toString());
+    }
+  };
+
+  const handleUpdateEmailPref = async (key, val) => {
+    try {
+      if (key === 'yt_enabled') setEmailYtEnabled(val);
+      if (key === 'tt_enabled') setEmailTtEnabled(val);
+      if (key === 'yt_live') setEmailYtLive(val);
+      if (key === 'yt_upload') setEmailYtUpload(val);
+      if (key === 'tt_live') setEmailTtLive(val);
+      if (key === 'tt_upload') setEmailTtUpload(val);
+
+      const metadataKey = `email_${key}`;
+      const { error } = await supabase.auth.updateUser({
+        data: { [metadataKey]: val }
+      });
+      if (error) throw error;
+    } catch (err) {
+      showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
+    }
+  };
+
   // Load channels when session is active
   useEffect(() => {
     if (!supabase || !session) return;
@@ -516,20 +857,89 @@ function App() {
           if (payload.eventType === 'UPDATE') {
             const updatedChannel = payload.new;
             const wasLive = prevLiveStatesRef.current[updatedChannel.id];
+            const prevUrl = prevVideoUrlsRef.current[updatedChannel.id];
             
-            if (updatedChannel.is_live && !wasLive) {
+            const isLiveEvent = updatedChannel.is_live && !wasLive;
+            const isUploadEvent = updatedChannel.last_video_url && prevUrl && updatedChannel.last_video_url !== prevUrl;
+
+            // Apply granular desktop notification filters
+            let shouldShowDesktop = notificationsEnabled;
+            if (shouldShowDesktop) {
+              if (updatedChannel.platform === 'youtube') {
+                if (!desktopYtEnabled) shouldShowDesktop = false;
+                else {
+                  if (isLiveEvent && !desktopYtLive) shouldShowDesktop = false;
+                  if (isUploadEvent && !desktopYtUpload) shouldShowDesktop = false;
+                }
+              }
+              if (updatedChannel.platform === 'tiktok') {
+                if (!desktopTtEnabled) shouldShowDesktop = false;
+                else {
+                  if (isLiveEvent && !desktopTtLive) shouldShowDesktop = false;
+                  if (isUploadEvent && !desktopTtUpload) shouldShowDesktop = false;
+                }
+              }
+            }
+
+            if (isLiveEvent) {
               if (soundEnabled) playChime();
-              if (Notification.permission === 'granted') {
+              if (shouldShowDesktop && Notification.permission === 'granted') {
                 new Notification(`🚨 ${updatedChannel.name} is LIVE!`, {
                   body: `${updatedChannel.name} just started streaming live on ${updatedChannel.platform}.`,
                   icon: '/favicon.ico'
                 });
               }
               showToast(`${updatedChannel.name} ${t('toastLiveNow')}`);
+
+              const notif = {
+                id: `${updatedChannel.id}-live-${Date.now()}`,
+                channelId: updatedChannel.id,
+                channelName: updatedChannel.name,
+                avatarUrl: updatedChannel.avatar_url,
+                platform: updatedChannel.platform,
+                type: 'live',
+                title: language === 'so' ? `${updatedChannel.name} wuu Toos u jiraa!` : `${updatedChannel.name} is LIVE!`,
+                subtitle: language === 'so' ? `Wuxuu hadda ka bilaabay Live ${updatedChannel.platform}` : `Started streaming live on ${updatedChannel.platform}`,
+                timestamp: new Date().toISOString(),
+                url: updatedChannel.platform === 'youtube' ? `https://youtube.com/channel/${updatedChannel.identifier}/live` : `https://tiktok.com/@${updatedChannel.identifier}/live`,
+                read: false
+              };
+              addNotification(notif);
+            }
+
+            if (isUploadEvent) {
+              if (soundEnabled) playChime();
+              if (shouldShowDesktop && Notification.permission === 'granted') {
+                new Notification(`🎥 New Upload from ${updatedChannel.name}!`, {
+                  body: `${updatedChannel.name} just uploaded a new video on ${updatedChannel.platform}.`,
+                  icon: '/favicon.ico'
+                });
+              }
+              showToast(
+                language === 'so'
+                  ? `${updatedChannel.name} wuxuu soo dhigay muuqaal cusub!`
+                  : `${updatedChannel.name} uploaded a new video!`
+              );
+
+              const notif = {
+                id: `${updatedChannel.id}-upload-${Date.now()}`,
+                channelId: updatedChannel.id,
+                channelName: updatedChannel.name,
+                avatarUrl: updatedChannel.avatar_url,
+                platform: updatedChannel.platform,
+                type: 'upload',
+                title: language === 'so' ? `${updatedChannel.name} wuxuu soo dhigay muuqaal cusub!` : `${updatedChannel.name} uploaded a new video!`,
+                subtitle: language === 'so' ? 'Muuqaal cusub ayaa hadda la soo dhigay.' : 'A new video has just been uploaded.',
+                timestamp: new Date().toISOString(),
+                url: updatedChannel.last_video_url,
+                read: false
+              };
+              addNotification(notif);
             }
             
             setChannels(prev => prev.map(ch => ch.id === updatedChannel.id ? updatedChannel : ch));
             prevLiveStatesRef.current[updatedChannel.id] = updatedChannel.is_live;
+            prevVideoUrlsRef.current[updatedChannel.id] = updatedChannel.last_video_url;
           } else {
             fetchChannels();
           }
@@ -538,13 +948,13 @@ function App() {
       .subscribe();
 
     // Fallback polling interval to guarantee UI updates immediately when backend updates DB
-    const pollInterval = setInterval(fetchChannels, 10000);
+    const pollInterval = setInterval(fetchChannels, pollIntervalTime);
 
     return () => {
       supabase.removeChannel(channelSubscription);
       clearInterval(pollInterval);
     };
-  }, [supabase, session, soundEnabled]);
+  }, [supabase, session, soundEnabled, pollIntervalTime]);
 
   // Request browser notification permissions
   useEffect(() => {
@@ -584,6 +994,18 @@ function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showProfileMenu]);
 
+  // Close the notifications dropdown when clicking outside of it
+  useEffect(() => {
+    if (!showNotifications) return;
+    const handleClickOutside = (e) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(e.target)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showNotifications]);
+
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
@@ -598,14 +1020,65 @@ function App() {
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
+
+      // Compare states to generate notifications if this is NOT the initial load
+      const hasInitialStates = Object.keys(prevLiveStatesRef.current).length > 0;
+      if (hasInitialStates && data) {
+        data.forEach(ch => {
+          const wasLive = prevLiveStatesRef.current[ch.id];
+          const prevUrl = prevVideoUrlsRef.current[ch.id];
+
+          if (ch.is_live && wasLive === false) {
+            // Channel went live
+            const notif = {
+              id: `${ch.id}-live-${Date.now()}`,
+              channelId: ch.id,
+              channelName: ch.name,
+              avatarUrl: ch.avatar_url,
+              platform: ch.platform,
+              type: 'live',
+              title: language === 'so' ? `${ch.name} wuu Toos u jiraa!` : `${ch.name} is LIVE!`,
+              subtitle: language === 'so' ? `Wuxuu hadda ka bilaabay Live ${ch.platform}` : `Started streaming live on ${ch.platform}`,
+              timestamp: new Date().toISOString(),
+              url: ch.platform === 'youtube' ? `https://youtube.com/channel/${ch.identifier}/live` : `https://tiktok.com/@${ch.identifier}/live`,
+              read: false
+            };
+            addNotification(notif);
+          }
+
+          if (ch.last_video_url && prevUrl && ch.last_video_url !== prevUrl) {
+            // New video upload
+            const notif = {
+              id: `${ch.id}-upload-${Date.now()}`,
+              channelId: ch.id,
+              channelName: ch.name,
+              avatarUrl: ch.avatar_url,
+              platform: ch.platform,
+              type: 'upload',
+              title: language === 'so' ? `${ch.name} wuxuu soo dhigay muuqaal cusub!` : `${ch.name} uploaded a new video!`,
+              subtitle: language === 'so' ? 'Muuqaal cusub ayaa hadda la soo dhigay.' : 'A new video has just been uploaded.',
+              timestamp: new Date().toISOString(),
+              url: ch.last_video_url,
+              read: false
+            };
+            addNotification(notif);
+          }
+        });
+      }
+
       setChannels(data || []);
       
-      // Store initial live states
+      // Store current states
       const states = {};
-      data.forEach(ch => {
-        states[ch.id] = ch.is_live;
-      });
+      const urls = {};
+      if (data) {
+        data.forEach(ch => {
+          states[ch.id] = ch.is_live;
+          urls[ch.id] = ch.last_video_url;
+        });
+      }
       prevLiveStatesRef.current = states;
+      prevVideoUrlsRef.current = urls;
     } catch (err) {
       showToast(t('toastFetchChannelsFail'), 'error');
     }
@@ -1181,6 +1654,7 @@ function App() {
       setShowNotesPanel(true);
       setNoteInputPosition('sidebar');
       setOverlayPos({ x: 20, y: 20 });
+      setPlaylistSearchQuery('');
       if (document.fullscreenElement) {
         try {
           document.exitFullscreen();
@@ -1192,6 +1666,7 @@ function App() {
   // Handle YT Player initialization and cleanup
   useEffect(() => {
     let playerInstance = null;
+    let progressInterval = null;
     
     if (activePlayer && activePlayer.channel.platform === 'youtube') {
       const container = document.getElementById('yt-player-iframe');
@@ -1206,9 +1681,76 @@ function App() {
               onReady: (event) => {
                 console.log("YT Player is ready event fired sync!");
                 ytPlayerRef.current = event.target;
+                
+                // Seek to saved progress if any
+                if (activePlayer.type === 'video' && activePlayer.videoId) {
+                  try {
+                    const savedTime = localStorage.getItem(`veonotes_progress_${activePlayer.videoId}`);
+                    if (savedTime) {
+                      const seekSeconds = parseFloat(savedTime);
+                      if (seekSeconds > 3) {
+                        console.log(`Resuming playback at ${seekSeconds}s`);
+                        event.target.seekTo(seekSeconds, true);
+                      }
+                    }
+                  } catch (e) {
+                    console.error("Failed to restore playback progress:", e);
+                  }
+                }
               },
               onStateChange: (event) => {
                 console.log("YT Player state changed sync:", event.data);
+                
+                // Save progress periodically when playing (State 1 = PLAYING)
+                if (event.data === 1 && activePlayer.type === 'video' && activePlayer.videoId) {
+                  if (!progressInterval) {
+                    progressInterval = setInterval(() => {
+                      try {
+                        const curTime = event.target.getCurrentTime();
+                        const duration = event.target.getDuration();
+                        if (curTime > 0 && duration > 0 && duration - curTime > 5) {
+                          localStorage.setItem(`veonotes_progress_${activePlayer.videoId}`, curTime.toString());
+                          setVideoProgress(prev => ({ ...prev, [activePlayer.videoId]: curTime }));
+                          updateContinueWatching(activePlayer.videoId, curTime);
+                        } else if (duration > 0 && duration - curTime <= 5) {
+                          localStorage.removeItem(`veonotes_progress_${activePlayer.videoId}`);
+                          setVideoProgress(prev => {
+                            const next = { ...prev };
+                            delete next[activePlayer.videoId];
+                            return next;
+                          });
+                          updateContinueWatching(activePlayer.videoId, 0);
+                        }
+                      } catch (e) {}
+                    }, 2000);
+                  }
+                } else {
+                  // Clear interval if not playing, and do a final progress save/clean
+                  if (progressInterval) {
+                    clearInterval(progressInterval);
+                    progressInterval = null;
+                  }
+                  
+                  if (activePlayer.type === 'video' && activePlayer.videoId) {
+                    try {
+                      const curTime = event.target.getCurrentTime();
+                      const duration = event.target.getDuration();
+                      if (curTime > 0 && duration > 0 && duration - curTime > 5) {
+                        localStorage.setItem(`veonotes_progress_${activePlayer.videoId}`, curTime.toString());
+                        setVideoProgress(prev => ({ ...prev, [activePlayer.videoId]: curTime }));
+                        updateContinueWatching(activePlayer.videoId, curTime);
+                      } else if (duration > 0 && duration - curTime <= 5) {
+                        localStorage.removeItem(`veonotes_progress_${activePlayer.videoId}`);
+                        setVideoProgress(prev => {
+                          const next = { ...prev };
+                          delete next[activePlayer.videoId];
+                          return next;
+                        });
+                        updateContinueWatching(activePlayer.videoId, 0);
+                      }
+                    } catch (e) {}
+                  }
+                }
               }
             }
           });
@@ -1228,6 +1770,9 @@ function App() {
       }
 
       return () => {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+        }
         if (playerInstance && typeof playerInstance.destroy === 'function') {
           try {
             playerInstance.destroy();
@@ -1442,8 +1987,33 @@ function App() {
     );
   }
 
+  const userMetadata = session ? (session.user.user_metadata || {}) : {};
+  const userFullName = userMetadata.full_name || userMetadata.name || "";
+  const userAvatarUrl = userMetadata.avatar_url || userMetadata.picture || null;
+
   const emailPrefix = session.user.email ? session.user.email.split('@')[0] : 'User';
-  const displayName = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
+  const displayName = userFullName || (emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1));
+
+  // Dynamic header titles based on active tab
+  let headerTitle = `👋 ${t('welcomeBack')}, ${displayName}`;
+  let headerSubtitle = t('welcomeSubtitle');
+
+  if (activeTab === 'continue-watching') {
+    headerTitle = language === 'so' ? '🍿 Sii Wad Daawashada' : '🍿 Continue Watching';
+    headerSubtitle = language === 'so' 
+      ? 'Muuqaaladii kuu qabyada ahaa ee aad horay u bilowday.' 
+      : 'Videos you started watching and haven\'t finished yet.';
+  } else if (activeTab === 'manager') {
+    headerTitle = language === 'so' ? '⚙️ Maamul Kanaalada' : '⚙️ Manage Channels';
+    headerSubtitle = language === 'so' 
+      ? 'Ku dar ama ka saar kanaalada YouTube iyo TikTok.' 
+      : 'Add or remove YouTube and TikTok channels from your feed.';
+  } else if (activeTab === 'settings') {
+    headerTitle = language === 'so' ? '🔧 Habaynta App-ka' : '🔧 App Settings';
+    headerSubtitle = language === 'so' 
+      ? 'Maaree mudnaanta guud, luuqadda, iyo dhawaaqa ogeysiisyada.' 
+      : 'Manage your application preferences, language, and notifications.';
+  }
 
   return (
     <div className="app-shell">
@@ -1460,8 +2030,15 @@ function App() {
             className={`sidebar-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
             onClick={() => setActiveTab('dashboard')}
           >
-            <Users size={18} />
+            <Home size={18} />
             {t('tabDashboard')}
+          </button>
+          <button
+            className={`sidebar-nav-item ${activeTab === 'continue-watching' ? 'active' : ''}`}
+            onClick={() => setActiveTab('continue-watching')}
+          >
+            <Play size={18} style={{ color: 'var(--accent-primary)' }} />
+            {language === 'so' ? 'Sii wad daawashada' : 'Continue Watching'}
           </button>
           <button
             className={`sidebar-nav-item ${activeTab === 'manager' ? 'active' : ''}`}
@@ -1482,7 +2059,13 @@ function App() {
         <div className="sidebar-spacer" />
 
         <div className="sidebar-profile">
-          <div className="profile-avatar">{session.user.email ? session.user.email.charAt(0).toUpperCase() : <User size={16} />}</div>
+          <div className="profile-avatar">
+            {userAvatarUrl ? (
+              <img src={userAvatarUrl} alt={displayName} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} referrerPolicy="no-referrer" />
+            ) : (
+              session.user.email ? session.user.email.charAt(0).toUpperCase() : <User size={16} />
+            )}
+          </div>
           <div className="sidebar-profile-info">
             <div className="sidebar-profile-name">{displayName}</div>
             <div className="sidebar-profile-plan">{t('freePlan')}</div>
@@ -1503,8 +2086,8 @@ function App() {
         {/* Topbar */}
         <header className="header">
           <div className="header-title-section">
-            <h1 style={{ fontSize: '1.7rem' }}>👋 {t('welcomeBack')}, {displayName}</h1>
-            <p>{t('welcomeSubtitle')}</p>
+            <h1 style={{ fontSize: '1.7rem' }}>{headerTitle}</h1>
+            <p>{headerSubtitle}</p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -1513,29 +2096,110 @@ function App() {
               {t('checkNow')}
             </button>
 
-            <button
-              className="theme-toggle"
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              title={`${t('soundLabel')}: ${soundEnabled ? 'ON' : 'OFF'}`}
-            >
-              {soundEnabled ? <Volume2 size={18} color="#34c759" /> : <VolumeX size={18} color="#8e8e93" />}
-            </button>
+            <div style={{ position: 'relative' }} ref={notificationsRef}>
+              <button 
+                className="theme-toggle" 
+                onClick={toggleNotifications}
+                title={language === 'so' ? 'Ogeysiisyada' : 'Notifications'}
+                style={{ position: 'relative' }}
+              >
+                <Bell size={18} />
+                {notifications.some(n => !n.read) && (
+                  <span className="notification-badge">
+                    {notifications.filter(n => !n.read).length}
+                  </span>
+                )}
+              </button>
 
-            <button
-              className="theme-toggle"
-              onClick={requestNotificationPermission}
-              title={t('pushAlert')}
-            >
-              {notificationsEnabled ? <Bell size={18} color="#34c759" /> : <BellOff size={18} color="#8e8e93" />}
-            </button>
+              {showNotifications && (
+                <div className="notifications-dropdown">
+                  <div className="notifications-header">
+                    <h3 className="notifications-title">
+                      {language === 'so' ? 'Ogeysiisyada' : 'Notifications'}
+                    </h3>
+                    {notifications.length > 0 && (
+                      <button 
+                        className="notifications-clear-btn" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNotifications([]);
+                          localStorage.setItem('veonotes_notifications', JSON.stringify([]));
+                        }}
+                      >
+                        {language === 'so' ? 'Nadiifi' : 'Clear All'}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="notifications-list">
+                    {notifications.length === 0 ? (
+                      <div className="notification-empty">
+                        <Bell size={24} style={{ color: 'var(--text-muted)' }} />
+                        <p>{language === 'so' ? 'Ma jiraan ogeysiisyada cusub' : 'No new notifications'}</p>
+                      </div>
+                    ) : (
+                      notifications.map(notif => (
+                        <div 
+                          key={notif.id} 
+                          className={`notification-item ${!notif.read ? 'unread' : ''}`}
+                          onClick={() => handleNotificationClick(notif)}
+                        >
+                          <div className="notification-avatar-container">
+                            {notif.avatarUrl ? (
+                              <img 
+                                src={cleanAvatarUrl(notif.avatarUrl)} 
+                                alt={notif.channelName} 
+                                className="notification-avatar"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className="notification-avatar" style={{ background: 'var(--surface-1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '1rem', color: 'var(--text-white)' }}>
+                                {notif.channelName ? notif.channelName.charAt(0) : '@'}
+                              </div>
+                            )}
+                            <span className={`notification-platform-badge ${notif.platform}`}>
+                              {notif.platform === 'youtube' ? (
+                                <Youtube size={10} color="white" />
+                              ) : (
+                                <span style={{ color: 'white', fontSize: '8px', fontWeight: 'bold' }}>T</span>
+                              )}
+                            </span>
+                          </div>
+
+                          <div className="notification-content">
+                            <h4 className="notification-title-text">{notif.title}</h4>
+                            <p className="notification-subtitle-text">{notif.subtitle}</p>
+                            <div className="notification-meta">
+                              <span className="notification-time">
+                                {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              <span className={`notification-indicator-dot ${notif.type}`} />
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? t('lightMode') : t('darkMode')}>
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
 
             <div style={{ position: 'relative' }} ref={profileMenuRef}>
-              <button className="profile-trigger" onClick={() => setShowProfileMenu(prev => !prev)}>
-                <div className="profile-avatar">{session.user.email ? session.user.email.charAt(0).toUpperCase() : <User size={16} />}</div>
+              <button className="profile-trigger" onClick={() => setShowProfileMenu(prev => !prev)} style={{ gap: '8px', padding: '6px 12px', background: 'var(--surface-1)', border: '1px solid var(--card-border)', borderRadius: '999px', display: 'flex', alignItems: 'center' }}>
+                <div className="profile-avatar">
+                  {userAvatarUrl ? (
+                    <img src={userAvatarUrl} alt={displayName} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} referrerPolicy="no-referrer" />
+                  ) : (
+                    session.user.email ? session.user.email.charAt(0).toUpperCase() : <User size={16} />
+                  )}
+                </div>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-white)', fontWeight: 500 }}>
+                  {displayName}
+                </span>
                 <ChevronDown size={14} />
               </button>
 
@@ -1543,7 +2207,11 @@ function App() {
                 <div className="profile-dropdown">
                   <div className="profile-dropdown-header">
                     <div className="profile-avatar">
-                      {session.user.email ? session.user.email.charAt(0).toUpperCase() : <User size={18} />}
+                      {userAvatarUrl ? (
+                        <img src={userAvatarUrl} alt={displayName} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} referrerPolicy="no-referrer" />
+                      ) : (
+                        session.user.email ? session.user.email.charAt(0).toUpperCase() : <User size={18} />
+                      )}
                     </div>
                     <div className="profile-dropdown-info">
                       <div className="profile-dropdown-info-label">{t('loggedInAs')}</div>
@@ -1552,12 +2220,6 @@ function App() {
                   </div>
 
                   <div className="profile-dropdown-section">
-                    <div className="profile-dropdown-row">
-                      <span className="profile-dropdown-label">{t('themeLabel')}</span>
-                      <button className="theme-toggle" onClick={toggleTheme}>
-                        {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-                      </button>
-                    </div>
                     <div className="profile-dropdown-row">
                       <span className="profile-dropdown-label">{t('languageLabel')}</span>
                       <div className="lang-switch">
@@ -1626,6 +2288,7 @@ function App() {
                             src={cleanAvatarUrl(channel.avatar_url)} 
                             alt={channel.name} 
                             className="channel-avatar"
+                            referrerPolicy="no-referrer"
                             onError={() => setAvatarErrors(prev => ({ ...prev, [channel.id]: true }))}
                             style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--card-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
                           />
@@ -1704,6 +2367,141 @@ function App() {
             </div>
           )}
 
+          {activeTab === 'continue-watching' && (
+            <div>
+              {(() => {
+                const stored = localStorage.getItem('veonotes_continue_watching');
+                let continueWatchingList = stored ? JSON.parse(stored) : [];
+                if (!Array.isArray(continueWatchingList)) continueWatchingList = [];
+
+                if (continueWatchingList.length === 0) {
+                  return (
+                    <div className="glass-card empty-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', textAlign: 'center' }}>
+                      <Play size={48} style={{ color: 'var(--text-muted)', marginBottom: '16px', opacity: 0.5 }} />
+                      <h3>{language === 'so' ? 'Muuqaal ma jiro' : 'No Videos Yet'}</h3>
+                      <p className="mt-2" style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                        {language === 'so' 
+                          ? 'Muuqaalada aad dhexda uga tagto ama aad daawato ayaa halkaan ka muuqan doona.' 
+                          : 'Videos you watch and leave in progress will appear here.'}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div>
+                    <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '20px' }}>
+                      {language === 'so' ? 'Muuqaalada kuu qabyada ah' : 'Continue Watching'}
+                    </h2>
+                    <div className="videos-grid">
+                      {continueWatchingList.map((item) => {
+                        const elapsed = videoProgress[item.id] || item.progress || 0;
+                        const total = durationStringToSeconds(item.duration);
+                        const pct = total > 0 ? Math.min((elapsed / total) * 100, 100) : 0;
+                        
+                        return (
+                          <div 
+                            key={item.id} 
+                            className="grid-video-card"
+                            onClick={() => {
+                              setActivePlayer({
+                                channel: {
+                                  id: item.channelId,
+                                  name: item.channelName,
+                                  avatar_url: item.channelAvatar,
+                                  platform: item.platform,
+                                  identifier: item.channelIdentifier
+                                },
+                                type: 'video',
+                                videoId: item.id
+                              });
+                            }}
+                          >
+                            <div className="grid-video-thumbnail-wrapper">
+                              {item.thumbnail ? (
+                                <img 
+                                  src={item.thumbnail} 
+                                  alt={item.title} 
+                                  className="grid-video-thumbnail"
+                                  referrerPolicy="no-referrer"
+                                  loading="lazy"
+                                />
+                              ) : null}
+                              {/* Platform Badge with Icon */}
+                              <span style={{ 
+                                position: 'absolute', 
+                                top: '8px', 
+                                left: '8px', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '4px', 
+                                background: item.platform === 'youtube' ? 'rgba(255, 59, 48, 0.95)' : 'rgba(0, 0, 0, 0.85)', 
+                                color: 'white', 
+                                padding: '3px 6px', 
+                                borderRadius: '4px', 
+                                fontSize: '0.6rem', 
+                                fontWeight: 'bold', 
+                                zIndex: 10,
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                                border: item.platform === 'youtube' ? '1px solid rgba(255, 59, 48, 0.4)' : '1px solid rgba(255, 255, 255, 0.15)'
+                              }}>
+                                {item.platform === 'youtube' ? <Youtube size={10} fill="white" /> : <Music2 size={10} />}
+                                {item.platform.toUpperCase()}
+                              </span>
+                              {item.duration && (
+                                <div style={{ position: 'absolute', bottom: '8px', right: '8px', background: 'rgba(0, 0, 0, 0.85)', color: 'white', padding: '3px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', zIndex: 5, letterSpacing: '0.5px', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
+                                  {elapsed > 0 ? `${formatDuration(elapsed)} / ${item.duration}` : item.duration}
+                                </div>
+                              )}
+                              {pct > 0 && (
+                                <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '4px', background: 'rgba(255, 255, 255, 0.2)', zIndex: 10 }}>
+                                  <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent-primary)', transition: 'width 0.2s ease' }} />
+                                </div>
+                              )}
+                              <div className="grid-video-fallback" style={{ display: item.thumbnail ? 'none' : 'flex' }}>
+                                <Youtube size={28} />
+                              </div>
+                            </div>
+                            <div className="grid-video-info">
+                              <h4 className="grid-video-title" title={item.title} style={{ fontSize: '0.85rem', lineHeight: '1.3', fontWeight: '600' }}>
+                                {item.title}
+                              </h4>
+                              {/* Channel Capsule */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', background: 'rgba(255, 255, 255, 0.03)', padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--card-border)' }}>
+                                {item.channelAvatar ? (
+                                  <img 
+                                    src={item.channelAvatar} 
+                                    alt={item.channelName} 
+                                    style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.1)' }} 
+                                  />
+                                ) : (
+                                  <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'var(--surface-1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 'bold' }}>
+                                    {item.channelName ? item.channelName.charAt(0) : '@'}
+                                  </div>
+                                )}
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-white)', fontWeight: '600', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', flex: 1 }}>
+                                  {item.channelName}
+                                </span>
+                              </div>
+                              {/* Watch Status & Date */}
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: '500' }}>
+                                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: pct > 0 ? 'var(--accent-primary)' : '#8e8e93', display: 'inline-block' }}></span>
+                                  {pct > 0 ? `${Math.round(pct)}% watched` : 'Started'}
+                                </span>
+                                <span>{new Date(item.lastWatched).toLocaleDateString(language === 'so' ? 'so-SO' : 'en-US')}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           {activeTab === 'manager' && (
             <div className="glass-card" style={{ maxWidth: '640px', margin: '0 auto', width: '100%' }}>
               <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '20px' }}>{t('addChannelTitle')}</h2>
@@ -1770,6 +2568,7 @@ function App() {
                           <img
                             src={cleanAvatarUrl(resolvedChannel.avatar)}
                             alt={resolvedChannel.name}
+                            referrerPolicy="no-referrer"
                             onError={() => setAvatarErrors(prev => ({ ...prev, preview: true }))}
                             style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--card-border)' }}
                           />
@@ -1866,148 +2665,565 @@ function App() {
       )}
 
       {activeTab === 'settings' && (
-        <div style={{ maxWidth: '640px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* E-Mail Settings Status Card */}
+        <div style={{ maxWidth: '1000px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+          {/* Preferences Card */}
           <div className="glass-card" style={{ padding: '32px' }}>
-            <h2 className="text-xl font-bold mb-6 flex items-center gap-3">
-              <Mail color="#5E17F5" size={24} /> 
-              {language === 'so' ? 'Habaynta Ogeysiiska Email-ka' : 'Email Notification Settings'}
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Settings color="#5E17F5" size={24} /> 
+              {language === 'so' ? 'Mudnaanta Guud' : 'General Preferences'}
             </h2>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '20px', borderRadius: '16px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--card-border)', marginBottom: '24px' }}>
-              <div className={`status-pill ${isEmailConfigured ? 'status-pill-green' : 'status-pill-red'}`} style={{ flexShrink: 0 }}></div>
-              <div style={{ flex: 1 }}>
-                <h4 style={{ fontWeight: 700, fontSize: '1rem', color: '#fff', marginBottom: '4px' }}>
-                  {isEmailConfigured 
-                    ? (language === 'so' ? 'Google Apps Script: Waa diyaar' : 'Google Apps Script: Configured') 
-                    : (language === 'so' ? 'Google Apps Script: Lalama xiriiri waayay' : 'Google Apps Script: Not Configured')}
-                </h4>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                  {isEmailConfigured 
-                    ? (language === 'so' ? 'Ogeysiisyada email-ka waxaa si toos ah loogu soo diri doonaa email-kaaga hoos ku qoran.' : 'Email alerts will be sent automatically to your verified email below.') 
-                    : (language === 'so' ? 'GAS_URL kuma jiro backend/.env. Fadlan raac tillaabooyinka hoose si aad u shido.' : 'GAS_URL is not set in backend/.env. Follow the steps below to configure.')}
-                </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {/* Theme Preference Row */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--card-border)', paddingBottom: '20px' }}>
+                <div>
+                  <h4 style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-white)', marginBottom: '4px' }}>
+                    {language === 'so' ? 'Muuqaalka App-ka (Theme)' : 'App Theme'}
+                  </h4>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    {language === 'so' ? 'Dooro habka iftiinka ama mugdiga.' : 'Switch between light and dark themes.'}
+                  </p>
+                </div>
+                <div className="lang-switch">
+                  <button 
+                    type="button" 
+                    className={theme === 'light' ? 'active' : ''} 
+                    onClick={() => setTheme('light')}
+                    style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                  >
+                    {language === 'so' ? 'Iftiin' : 'Light'}
+                  </button>
+                  <button 
+                    type="button" 
+                    className={theme === 'dark' ? 'active' : ''} 
+                    onClick={() => setTheme('dark')}
+                    style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                  >
+                    {language === 'so' ? 'Mugdi' : 'Dark'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Language Preference Row */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--card-border)', paddingTop: '20px', paddingBottom: '20px' }}>
+                <div>
+                  <h4 style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-white)', marginBottom: '4px' }}>
+                    {language === 'so' ? 'Luuqadda App-ka' : 'App Language'}
+                  </h4>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    {language === 'so' ? 'Dooro luuqadda aad ku isticmaalayso app-ka.' : 'Select the language of the application.'}
+                  </p>
+                </div>
+                <div className="lang-switch">
+                  <button 
+                    type="button" 
+                    className={language === 'so' ? 'active' : ''} 
+                    onClick={() => changeLanguage('so')}
+                    style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                  >
+                    SO
+                  </button>
+                  <button 
+                    type="button" 
+                    className={language === 'en' ? 'active' : ''} 
+                    onClick={() => changeLanguage('en')}
+                    style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                  >
+                    EN
+                  </button>
+                </div>
+              </div>
+
+              {/* Sound Alerts Preferences Row */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--card-border)', paddingTop: '20px', paddingBottom: '20px' }}>
+                <div style={{ flex: 1, paddingRight: '12px' }}>
+                  <h4 style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-white)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Volume2 size={16} color="var(--accent-primary)" />
+                    {language === 'so' ? 'Ogeysiiska Dhawaaqa' : 'Sound Alerts'}
+                  </h4>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                    {language === 'so' 
+                      ? 'Diri dhawaaq digniin ah mar kasta oo kanaal la socdo uu live galo ama muuqaal cusub soo dhigo.' 
+                      : 'Play a notification chime when a tracked channel goes live or uploads a video.'}
+                  </p>
+                </div>
+                <div className="lang-switch">
+                  <button 
+                    type="button" 
+                    className={soundEnabled ? 'active' : ''} 
+                    onClick={() => setSoundEnabled(true)}
+                    style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                  >
+                    {language === 'so' ? 'Daaran' : 'ON'}
+                  </button>
+                  <button 
+                    type="button" 
+                    className={!soundEnabled ? 'active' : ''} 
+                    onClick={() => setSoundEnabled(false)}
+                    style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                  >
+                    {language === 'so' ? 'Damsan' : 'OFF'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Push Notifications Row */}
+              <div style={{ borderBottom: '1px solid var(--card-border)', paddingTop: '20px', paddingBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ flex: 1, paddingRight: '12px' }}>
+                    <h4 style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-white)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Volume2 size={16} color="var(--accent-primary)" />
+                      {language === 'so' ? 'Ogeysiisyada Desktop-ka' : 'Desktop Notifications'}
+                    </h4>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                      {language === 'so' 
+                        ? 'Ku tusi ogeysiiska browser-ka ee shaashada kombiyuutarkaaga marka cusbooneysiin cusub tinto.' 
+                        : 'Show browser notifications on your desktop screen when new updates arrive.'}
+                    </p>
+                  </div>
+                  <div className="switch-container">
+                    <label className="switch-label">
+                      <input 
+                        type="checkbox" 
+                        checked={notificationsEnabled} 
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            requestNotificationPermission();
+                          } else {
+                            setNotificationsEnabled(false);
+                            showToast(language === 'so' ? 'Ogeysiisyada desktop-ka waa la damiyay' : 'Desktop notifications disabled', 'success');
+                          }
+                        }} 
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  </div>
+                </div>
+                {notificationsEnabled && (
+                  <div style={{ 
+                    marginTop: '16px', 
+                    padding: '16px 20px', 
+                    background: 'rgba(255,255,255,0.02)', 
+                    border: '1px dashed var(--card-border)', 
+                    borderRadius: '12px',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap: '16px',
+                    animation: 'overlay-fade-in 0.2s ease-out'
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px' }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          YouTube
+                        </div>
+                        <label className="switch-label" style={{ transform: 'scale(0.75)', transformOrigin: 'right center' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={desktopYtEnabled} 
+                            onChange={(e) => handleUpdateDesktopPref('yt_enabled', e.target.checked)} 
+                          />
+                          <span className="slider"></span>
+                        </label>
+                      </div>
+                      {desktopYtEnabled && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', animation: 'overlay-fade-in 0.2s ease-out' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-white)' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={desktopYtLive} 
+                              onChange={(e) => handleUpdateDesktopPref('yt_live', e.target.checked)} 
+                              style={{ accentColor: 'var(--accent-primary)' }}
+                            />
+                            {language === 'so' ? '🔴 YouTube Lives' : '🔴 YouTube Lives'}
+                          </label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-white)' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={desktopYtUpload} 
+                              onChange={(e) => handleUpdateDesktopPref('yt_upload', e.target.checked)} 
+                              style={{ accentColor: 'var(--accent-primary)' }}
+                            />
+                            {language === 'so' ? '🎥 YouTube Uploads' : '🎥 YouTube Uploads'}
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px' }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          TikTok
+                        </div>
+                        <label className="switch-label" style={{ transform: 'scale(0.75)', transformOrigin: 'right center' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={desktopTtEnabled} 
+                            onChange={(e) => handleUpdateDesktopPref('tt_enabled', e.target.checked)} 
+                          />
+                          <span className="slider"></span>
+                        </label>
+                      </div>
+                      {desktopTtEnabled && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', animation: 'overlay-fade-in 0.2s ease-out' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-white)' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={desktopTtLive} 
+                              onChange={(e) => handleUpdateDesktopPref('tt_live', e.target.checked)} 
+                              style={{ accentColor: 'var(--accent-primary)' }}
+                            />
+                            {language === 'so' ? '🔴 TikTok Lives' : '🔴 TikTok Lives'}
+                          </label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-white)' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={desktopTtUpload} 
+                              onChange={(e) => handleUpdateDesktopPref('tt_upload', e.target.checked)} 
+                              style={{ accentColor: 'var(--accent-primary)' }}
+                            />
+                            {language === 'so' ? '🎥 TikTok Uploads' : '🎥 TikTok Uploads'}
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Email Notifications Row */}
+              <div style={{ borderBottom: '1px solid var(--card-border)', paddingTop: '20px', paddingBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h4 style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-white)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Mail size={16} color="var(--accent-primary)" />
+                      {language === 'so' ? 'Ogeysiisyada Iimaylka' : 'Email Notifications'}
+                    </h4>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                      {language === 'so' 
+                        ? 'Hel ogeysiisyada iimaylka marka uu kanalku toos u galo ama muuqaal cusub la soo dhigo.' 
+                        : 'Get email notifications when a channel goes live or uploads a video.'}
+                    </p>
+                  </div>
+                  <div className="switch-container">
+                    <label className="switch-label">
+                      <input 
+                        type="checkbox" 
+                        checked={emailNotificationsEnabled} 
+                        onChange={(e) => handleToggleEmailNotifications(e.target.checked)} 
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  </div>
+                </div>
+                {emailNotificationsEnabled && (
+                  <div style={{ 
+                    marginTop: '16px', 
+                    padding: '16px 20px', 
+                    background: 'rgba(255,255,255,0.02)', 
+                    border: '1px dashed var(--card-border)', 
+                    borderRadius: '12px',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap: '16px',
+                    animation: 'overlay-fade-in 0.2s ease-out'
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px' }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          YouTube
+                        </div>
+                        <label className="switch-label" style={{ transform: 'scale(0.75)', transformOrigin: 'right center' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={emailYtEnabled} 
+                            onChange={(e) => handleUpdateEmailPref('yt_enabled', e.target.checked)} 
+                          />
+                          <span className="slider"></span>
+                        </label>
+                      </div>
+                      {emailYtEnabled && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', animation: 'overlay-fade-in 0.2s ease-out' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-white)' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={emailYtLive} 
+                              onChange={(e) => handleUpdateEmailPref('yt_live', e.target.checked)} 
+                              style={{ accentColor: 'var(--accent-primary)' }}
+                            />
+                            {language === 'so' ? '🔴 YouTube Lives' : '🔴 YouTube Lives'}
+                          </label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-white)' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={emailYtUpload} 
+                              onChange={(e) => handleUpdateEmailPref('yt_upload', e.target.checked)} 
+                              style={{ accentColor: 'var(--accent-primary)' }}
+                            />
+                            {language === 'so' ? '🎥 YouTube Uploads' : '🎥 YouTube Uploads'}
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px' }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          TikTok
+                        </div>
+                        <label className="switch-label" style={{ transform: 'scale(0.75)', transformOrigin: 'right center' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={emailTtEnabled} 
+                            onChange={(e) => handleUpdateEmailPref('tt_enabled', e.target.checked)} 
+                          />
+                          <span className="slider"></span>
+                        </label>
+                      </div>
+                      {emailTtEnabled && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', animation: 'overlay-fade-in 0.2s ease-out' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-white)' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={emailTtLive} 
+                              onChange={(e) => handleUpdateEmailPref('tt_live', e.target.checked)} 
+                              style={{ accentColor: 'var(--accent-primary)' }}
+                            />
+                            {language === 'so' ? '🔴 TikTok Lives' : '🔴 TikTok Lives'}
+                          </label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-white)' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={emailTtUpload} 
+                              onChange={(e) => handleUpdateEmailPref('tt_upload', e.target.checked)} 
+                              style={{ accentColor: 'var(--accent-primary)' }}
+                            />
+                            {language === 'so' ? '🎥 TikTok Uploads' : '🎥 TikTok Uploads'}
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Alarm Notification Tone Row */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '20px' }}>
+                <div>
+                  <h4 style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-white)', marginBottom: '4px' }}>
+                    {language === 'so' ? 'Nooca Dhawaaqa Ogeysiiska' : 'Notification Alarm Tone'}
+                  </h4>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    {language === 'so' ? 'Dooro dhawaaqa aad rabto in la dharbaaxo.' : 'Choose the sound effect played on alerts.'}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className="lang-switch">
+                    <button 
+                      type="button" 
+                      className={alarmTone === 'chime' ? 'active' : ''} 
+                      onClick={() => {
+                        setAlarmTone('chime');
+                        localStorage.setItem('veonotes_alarm_tone', 'chime');
+                        playChime('chime');
+                      }}
+                      style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                    >
+                      {language === 'so' ? 'Chime' : 'Chime'}
+                    </button>
+                    <button 
+                      type="button" 
+                      className={alarmTone === 'ping' ? 'active' : ''} 
+                      onClick={() => {
+                        setAlarmTone('ping');
+                        localStorage.setItem('veonotes_alarm_tone', 'ping');
+                        playChime('ping');
+                      }}
+                      style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                    >
+                      {language === 'so' ? 'Ping' : 'Ping'}
+                    </button>
+                    <button 
+                      type="button" 
+                      className={alarmTone === 'melody' ? 'active' : ''} 
+                      onClick={() => {
+                        setAlarmTone('melody');
+                        localStorage.setItem('veonotes_alarm_tone', 'melody');
+                        playChime('melody');
+                      }}
+                      style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                    >
+                      {language === 'so' ? 'Melody' : 'Melody'}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-action"
+                    style={{ height: '32px', width: '32px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}
+                    onClick={() => playChime(alarmTone)}
+                    title={language === 'so' ? 'Tijaabi codka' : 'Test sound'}
+                  >
+                    <Play size={14} fill="currentColor" />
+                  </button>
+                </div>
               </div>
             </div>
+          </div>
 
-            <div className="form-group" style={{ marginBottom: '24px' }}>
-              <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                {language === 'so' ? 'Email-kaaga (Ogeysiisyada lagugu soo dirayo)' : 'Your Email (For receiving notifications)'}
-              </label>
-              <input 
-                type="email" 
-                className="input-field"
-                value={session?.user?.email || ''}
-                disabled
-                style={{ opacity: 0.7, cursor: 'not-allowed', backgroundColor: 'rgba(255,255,255,0.03)', marginTop: '8px' }}
-              />
-            </div>
-
-            {isEmailConfigured && (
+          {/* Data & Cache Management Card */}
+          <div className="glass-card" style={{ padding: '32px' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Trash2 color="#ff3b30" size={24} /> 
+              {language === 'so' ? 'Maareynta Xogta & Cache-ka' : 'Data & Cache Management'}
+            </h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h4 style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-white)', marginBottom: '4px' }}>
+                  {language === 'so' ? 'Nadiifi Taariikhda Daawashada' : 'Clear Watch History'}
+                </h4>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                  {language === 'so' 
+                    ? 'Tirtir dhammaan horumarka muuqaalada aad daawatay iyo liiska "Sii wad daawashada" (Continue Watching).' 
+                    : 'Clear all video playback progress caches and the "Continue Watching" list.'}
+                </p>
+              </div>
               <button 
                 type="button" 
-                className="btn btn-primary" 
-                style={{ width: '100%', padding: '14px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }} 
-                onClick={sendTestEmail} 
-                disabled={isLoading}
+                className="btn btn-action" 
+                style={{ borderColor: 'rgba(255, 59, 48, 0.4)', color: '#ff3b30', height: '40px', padding: '0 16px', fontSize: '0.85rem' }}
+                onClick={() => {
+                  const conf = window.confirm(language === 'so' ? 'Ma hubtaa inaad rabto inaad tirtirto dhammaan taariikhda daawashada?' : 'Are you sure you want to clear all watch history?');
+                  if (conf) {
+                    try {
+                      // Remove all veonotes_progress_* keys
+                      const keysToRemove = [];
+                      for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key && (key.startsWith('veonotes_progress_') || key === 'veonotes_continue_watching')) {
+                          keysToRemove.push(key);
+                        }
+                      }
+                      keysToRemove.forEach(k => localStorage.removeItem(k));
+                      setVideoProgress({});
+                      showToast(language === 'so' ? 'Taariikhda daawashada waa la nadiifiyay!' : 'Watch history cleared successfully!', 'success');
+                    } catch (e) {
+                      showToast('Error clearing history', 'error');
+                    }
+                  }
+                }}
               >
-                <Mail size={18} />
-                {language === 'so' ? 'Tijaabi Email-ka' : 'Send Test Email'}
+                {language === 'so' ? 'Nadiifi Hadda' : 'Clear Now'}
               </button>
-            )}
-          </div>
-
-          {/* Setup Guide Card */}
-          <div className="glass-card" style={{ padding: '32px' }}>
-            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fff', marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Settings size={20} color="#5E17F5" />
-              {language === 'so' ? 'Sida loo diyaariyo Google Apps Script:' : 'How to set up Google Apps Script:'}
-            </h3>
-            
-            <div style={{ fontSize: '0.88rem', lineHeight: '1.6', color: 'var(--text-muted)' }}>
-              <ol className="list-decimal list-inside space-y-3" style={{ paddingLeft: '4px' }}>
-                <li>
-                  {language === 'so' 
-                    ? <>Booqo <a href="https://script.google.com" target="_blank" rel="noreferrer" style={{color: 'var(--accent-primary)', textDecoration: 'underline'}}>script.google.com</a> oo ku samee mashruuc cusub (New Project).</>
-                    : <>Go to <a href="https://script.google.com" target="_blank" rel="noreferrer" style={{color: 'var(--accent-primary)', textDecoration: 'underline'}}>script.google.com</a> and create a new project.</>}
-                </li>
-                <li>
-                  {language === 'so'
-                    ? 'Ku shub (paste) koodhkan hoose qaybta code-ka:'
-                    : 'Paste the following code into the editor:'}
-                  <pre style={{ background: '#000', padding: '14px', borderRadius: '10px', marginTop: '8px', marginBottom: '8px', overflowX: 'auto', color: '#34c759', fontFamily: 'monospace', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.05)' }}>
-{`function doPost(e) {
-  try {
-    var data = JSON.parse(e.postData.contents);
-    MailApp.sendEmail({
-      to: data.to,
-      subject: data.subject,
-      htmlBody: data.html
-    });
-    return ContentService.createTextOutput(JSON.stringify({ success: true }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}`}
-                  </pre>
-                </li>
-                <li>
-                  {language === 'so'
-                    ? <>Guji <strong>Deploy</strong> &rarr; <strong>New Deployment</strong>.</>
-                    : <>Click <strong>Deploy</strong> &rarr; <strong>New Deployment</strong>.</>}
-                </li>
-                <li>
-                  {language === 'so'
-                    ? <>Dooro nooca <strong>Web App</strong>.</>
-                    : <>Select type <strong>Web App</strong>.</>}
-                </li>
-                <li>
-                  {language === 'so'
-                    ? <>U dooro Execute As: <strong>Me</strong> iyo Who has access: <strong>Anyone</strong> (Tani waa muhiim!).</>
-                    : <>Set Execute As: <strong>Me</strong> and Who has access: <strong>Anyone</strong> (This is critical!).</>}
-                </li>
-                <li>
-                  {language === 'so'
-                    ? <>Guji <strong>Deploy</strong>, oggolow fasaxa (Authorize access), dabadeed nuqul ka qaado (copy) <strong>Web App URL</strong>.</>
-                    : <>Click <strong>Deploy</strong>, authorize the access, then copy the generated <strong>Web App URL</strong>.</>}
-                </li>
-                <li>
-                  {language === 'so'
-                    ? <>Fungla <code>backend/.env</code>, ku dar <code>GAS_URL=halkan_geli_url_kaaga</code>, dabadeedna dib u kici server-ka backend-ka.</>
-                    : <>Open <code>backend/.env</code>, add <code>GAS_URL=your_web_app_url_here</code>, and restart the backend server.</>}
-                </li>
-              </ol>
             </div>
           </div>
+
+
         </div>
       )}
       {/* Player & Notes Modal Overlay */}
       {activePlayer && (
         <div className="player-modal-overlay">
-          <div className="player-modal-container">
-            {/* Modal Header */}
-            <div className="player-modal-header" style={{ flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '200px' }}>
-                {activePlayer.videoId && (
+          <div className="player-modal-container" style={{ display: 'flex', flexDirection: 'row' }}>
+            {modalSidebarOpen && (
+              <aside className="sidebar" style={{ borderRight: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+                <div className="sidebar-logo">
+                  <img src="/veonotes-icon-256.png" alt="Veonotes" />
+                  <span>Veonotes</span>
+                </div>
+                <p className="sidebar-tagline">{t('appSubtitle')}</p>
+
+                <nav className="sidebar-nav">
+                  <button
+                    className={`sidebar-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveTab('dashboard');
+                      setActivePlayer(null);
+                    }}
+                  >
+                    <Home size={18} />
+                    {t('tabDashboard')}
+                  </button>
+                  <button
+                    className={`sidebar-nav-item ${activeTab === 'continue-watching' ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveTab('continue-watching');
+                      setActivePlayer(null);
+                    }}
+                  >
+                    <Play size={18} style={{ color: 'var(--accent-primary)' }} />
+                    {language === 'so' ? 'Sii wad daawashada' : 'Continue Watching'}
+                  </button>
+                  <button
+                    className={`sidebar-nav-item ${activeTab === 'manager' ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveTab('manager');
+                      setActivePlayer(null);
+                    }}
+                  >
+                    <Plus size={18} />
+                    {t('tabAddChannel')}
+                  </button>
+                  <button
+                    className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveTab('settings');
+                      setActivePlayer(null);
+                    }}
+                  >
+                    <Settings size={18} />
+                    {t('tabSettings')}
+                  </button>
+                </nav>
+
+                <div className="sidebar-spacer" />
+
+                <div className="sidebar-profile">
+                  <div className="profile-avatar">
+                    {userAvatarUrl ? (
+                      <img src={userAvatarUrl} alt={displayName} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} referrerPolicy="no-referrer" />
+                    ) : (
+                      session.user.email ? session.user.email.charAt(0).toUpperCase() : <User size={16} />
+                    )}
+                  </div>
+                  <div className="sidebar-profile-info">
+                    <div className="sidebar-profile-name">{displayName}</div>
+                    <div className="sidebar-profile-plan">{t('freePlan')}</div>
+                  </div>
+                </div>
+              </aside>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+              {/* Modal Header */}
+              <div className="player-modal-header" style={{ flexWrap: 'wrap', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '200px' }}>
                   <button
                     type="button"
                     className="btn btn-action"
-                    onClick={() => {
-                      setActivePlayer(prev => ({ ...prev, videoId: null }));
-                      setNewNoteText('');
-                    }}
-                    style={{ height: '32px', padding: '0 10px', fontSize: '0.8rem', gap: '4px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--card-border)', marginRight: '4px', display: 'inline-flex', alignItems: 'center' }}
+                    onClick={() => setModalSidebarOpen(prev => !prev)}
+                    style={{ height: '32px', padding: '0 10px', fontSize: '0.8rem', gap: '4px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--card-border)', display: 'inline-flex', alignItems: 'center' }}
+                    title={language === 'so' ? "Muuji/Qari Sidebar" : "Show/Hide Sidebar"}
                   >
-                    {t('backBtn')}
+                    <GripVertical size={14} />
+                    {language === 'so' ? 'Menu' : 'Menu'}
                   </button>
-                )}
+                  {activePlayer.videoId && (
+                    <button
+                      type="button"
+                      className="btn btn-action"
+                      onClick={() => {
+                        setActivePlayer(prev => ({ ...prev, videoId: null }));
+                        setNewNoteText('');
+                      }}
+                      style={{ height: '32px', padding: '0 10px', fontSize: '0.8rem', gap: '4px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--card-border)', marginRight: '4px', display: 'inline-flex', alignItems: 'center' }}
+                    >
+                      {t('backBtn')}
+                    </button>
+                  )}
                 {activePlayer.channel.avatar_url && (
                   <img 
                     src={activePlayer.channel.avatar_url} 
-                     alt={activePlayer.channel.name} 
-                     style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+                    alt={activePlayer.channel.name} 
+                    referrerPolicy="no-referrer"
+                    style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
                   />
                 )}
                 <h3 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -2026,73 +3242,113 @@ function App() {
               
               {/* Controls and Settings Bar */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                {/* Note Position Selector */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('noteInputLabel')}</span>
-                  <select 
-                    value={noteInputPosition}
-                    onChange={(e) => setNoteInputPosition(e.target.value)}
-                    className="select-field"
-                    style={{
-                      margin: 0,
-                      padding: '0 28px 0 10px',
-                      fontSize: '0.8rem',
-                      height: '32px',
-                      cursor: 'pointer',
-                      width: 'auto'
-                    }}
-                  >
-                    <option value="sidebar">{t('noteInputSidebar')}</option>
-                    {activePlayer.videoId && <option value="overlay">{t('noteInputOverlay')}</option>}
-                  </select>
-                </div>
+                {activePlayer.videoId ? (
+                  <>
+                    {/* Note Position Selector */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t('noteInputLabel')}</span>
+                      <select 
+                        value={noteInputPosition}
+                        onChange={(e) => setNoteInputPosition(e.target.value)}
+                        className="select-field"
+                        style={{
+                          margin: 0,
+                          padding: '0 28px 0 10px',
+                          fontSize: '0.8rem',
+                          height: '32px',
+                          cursor: 'pointer',
+                          width: 'auto'
+                        }}
+                      >
+                        <option value="sidebar">{t('noteInputSidebar')}</option>
+                        {activePlayer.videoId && <option value="overlay">{t('noteInputOverlay')}</option>}
+                      </select>
+                    </div>
 
-                {/* Sidebar Toggle Button */}
-                <button 
-                  type="button" 
-                  className="btn-action" 
-                  onClick={() => setShowNotesPanel(!showNotesPanel)}
-                  style={{ height: '32px', padding: '0 12px', fontSize: '0.8rem', gap: '6px' }}
-                >
-                  {showNotesPanel ? (
-                    <>
-                      <EyeOff size={14} /> {t('hideSidebar')}
-                    </>
-                  ) : (
-                    <>
-                      <Eye size={14} /> {t('showSidebar')}
-                    </>
-                  )}
-                </button>
+                    {/* Sidebar Toggle Button */}
+                    <button 
+                      type="button" 
+                      className="btn-action" 
+                      onClick={() => setShowNotesPanel(!showNotesPanel)}
+                      style={{ height: '32px', padding: '0 12px', fontSize: '0.8rem', gap: '6px' }}
+                    >
+                      {showNotesPanel ? (
+                        <>
+                          <EyeOff size={14} /> {t('hideSidebar')}
+                        </>
+                      ) : (
+                        <>
+                          <Eye size={14} /> {t('showSidebar')}
+                        </>
+                      )}
+                    </button>
 
-                {/* Fullscreen Button */}
-                <button 
-                  type="button" 
-                  className="btn-action" 
-                  onClick={toggleFullscreen}
-                  style={{ height: '32px', padding: '0 12px', fontSize: '0.8rem', gap: '6px' }}
-                >
-                  {isFullscreen ? (
-                    <>
-                      <Minimize size={14} /> {t('exitFullscreen')}
-                    </>
-                  ) : (
-                    <>
-                      <Maximize size={14} /> {t('enterFullscreen')}
-                    </>
-                  )}
-                </button>
+                    {/* Fullscreen Button */}
+                    <button 
+                      type="button" 
+                      className="btn-action" 
+                      onClick={toggleFullscreen}
+                      style={{ height: '32px', padding: '0 12px', fontSize: '0.8rem', gap: '6px' }}
+                    >
+                      {isFullscreen ? (
+                        <>
+                          <Minimize size={14} /> {t('exitFullscreen')}
+                        </>
+                      ) : (
+                        <>
+                          <Maximize size={14} /> {t('enterFullscreen')}
+                        </>
+                      )}
+                    </button>
 
-                {/* Ku laabo Live-ka Button */}
-                {activePlayer.type === 'live' && activePlayer.channel.platform === 'youtube' && activePlayer.videoId && (
-                  <button 
-                    type="button" 
-                    className="btn btn-primary" 
-                    onClick={goBackToLiveEdge}
-                    style={{ height: '32px', padding: '0 12px', fontSize: '0.8rem', gap: '6px', background: 'var(--primary-red)', color: 'white', border: 'none', fontWeight: 'bold' }}
-                  >
-                    {t('goBackToLive')}
-                  </button>
+                    {/* Ku laabo Live-ka Button */}
+                    {activePlayer.type === 'live' && activePlayer.channel.platform === 'youtube' && activePlayer.videoId && (
+                      <button 
+                        type="button" 
+                        className="btn btn-primary" 
+                        onClick={goBackToLiveEdge}
+                        style={{ height: '32px', padding: '0 12px', fontSize: '0.8rem', gap: '6px', background: 'var(--primary-red)', color: 'white', border: 'none', fontWeight: 'bold' }}
+                      >
+                        {t('goBackToLive')}
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {/* Search Field */}
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <input 
+                        type="text"
+                        placeholder={language === 'so' ? "Raadi muuqaal..." : "Search video..."}
+                        value={playlistSearchQuery}
+                        onChange={(e) => setPlaylistSearchQuery(e.target.value)}
+                        className="input-field"
+                        style={{
+                          margin: 0,
+                          padding: '0 12px',
+                          fontSize: '0.8rem',
+                          height: '32px',
+                          width: '200px',
+                          background: 'rgba(255,255,255,0.05)',
+                          border: '1px solid var(--card-border)',
+                          borderRadius: '8px',
+                          color: 'var(--text-white)'
+                        }}
+                      />
+                    </div>
+
+                    {/* Refresh Button */}
+                    <button 
+                      type="button" 
+                      className="btn-action" 
+                      onClick={() => fetchChannelVideos(activePlayer.channel.id, activePlayer.channel.platform, activePlayer.channel.identifier)}
+                      style={{ height: '32px', padding: '0 12px', fontSize: '0.8rem', gap: '6px' }}
+                      disabled={isLoadingVideos}
+                    >
+                      <RefreshCw size={14} className={isLoadingVideos ? 'spin' : ''} />
+                      {language === 'so' ? 'Cusbooneysii' : 'Refresh'}
+                    </button>
+                  </>
                 )}
 
                 {/* Close Button */}
@@ -2169,6 +3425,7 @@ function App() {
                                 src={activePlayer.channel.avatar_url} 
                                 alt={activePlayer.channel.name} 
                                 className="grid-video-thumbnail"
+                                referrerPolicy="no-referrer"
                                 style={{ filter: 'brightness(0.8)' }}
                               />
                             ) : null}
@@ -2191,42 +3448,56 @@ function App() {
                         </div>
                       )}
 
-                      {channelVideos.map((video) => (
-                        <div 
-                          key={video.id} 
-                          className="grid-video-card"
-                          onClick={() => {
-                            setActivePlayer(prev => ({
-                              ...prev,
-                              type: 'video',
-                              videoId: video.id
-                            }));
-                          }}
-                        >
-                          <div className="grid-video-thumbnail-wrapper">
-                            {video.thumbnail ? (
-                              <img 
-                                src={video.thumbnail} 
-                                alt={video.title} 
-                                className="grid-video-thumbnail"
-                                referrerPolicy="no-referrer"
-                                loading="lazy"
-                                onError={(e) => {
-                                  e.target.style.display = 'none';
-                                  const fallback = e.target.parentNode.querySelector('.grid-video-fallback');
-                                  if (fallback) fallback.style.display = 'flex';
-                                }}
-                              />
-                            ) : null}
-                            {(video.is_live || (video.title && (video.title.toLowerCase().includes('live') || video.title.toLowerCase().includes('toos') || video.title.toLowerCase().includes('stream')))) && (
-                              <div style={{ position: 'absolute', top: '8px', right: '8px', background: 'var(--primary-red)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 'bold', zIndex: 5, letterSpacing: '0.5px', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
-                                LIVE
+                      {channelVideos.filter(v => v.title && v.title.toLowerCase().includes(playlistSearchQuery.toLowerCase())).map((video) => {
+                        const elapsed = videoProgress[video.id] || 0;
+                        const total = durationStringToSeconds(video.duration);
+                        const pct = total > 0 ? Math.min((elapsed / total) * 100, 100) : 0;
+                        return (
+                          <div 
+                            key={video.id} 
+                            className="grid-video-card"
+                            onClick={() => {
+                              setActivePlayer(prev => ({
+                                ...prev,
+                                type: 'video',
+                                videoId: video.id
+                              }));
+                            }}
+                          >
+                            <div className="grid-video-thumbnail-wrapper">
+                              {video.thumbnail ? (
+                                <img 
+                                  src={video.thumbnail} 
+                                  alt={video.title} 
+                                  className="grid-video-thumbnail"
+                                  referrerPolicy="no-referrer"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    const fallback = e.target.parentNode.querySelector('.grid-video-fallback');
+                                    if (fallback) fallback.style.display = 'flex';
+                                  }}
+                                />
+                              ) : null}
+                              {(video.is_live || (video.title && (video.title.toLowerCase().includes('live') || video.title.toLowerCase().includes('toos') || video.title.toLowerCase().includes('stream')))) && (
+                                <div style={{ position: 'absolute', top: '8px', right: '8px', background: 'var(--primary-red)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 'bold', zIndex: 5, letterSpacing: '0.5px', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
+                                  LIVE
+                                </div>
+                              )}
+                              {video.duration && (
+                                <div style={{ position: 'absolute', bottom: '8px', right: '8px', background: 'rgba(0, 0, 0, 0.85)', color: 'white', padding: '3px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold', zIndex: 5, letterSpacing: '0.5px', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
+                                  {elapsed > 0 ? `${formatDuration(elapsed)} / ${video.duration}` : video.duration}
+                                </div>
+                              )}
+                              {pct > 0 && (
+                                <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '4px', background: 'rgba(255, 255, 255, 0.2)', zIndex: 10 }}>
+                                  <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent-primary)', transition: 'width 0.2s ease' }} />
+                                </div>
+                              )}
+                              <div className="grid-video-fallback" style={{ display: video.thumbnail ? 'none' : 'flex' }}>
+                                <Youtube size={28} />
                               </div>
-                            )}
-                            <div className="grid-video-fallback" style={{ display: video.thumbnail ? 'none' : 'flex' }}>
-                              <Youtube size={28} />
                             </div>
-                          </div>
                           <div className="grid-video-info">
                             <h4 className="grid-video-title" title={video.title}>
                               {video.title}
@@ -2242,7 +3513,8 @@ function App() {
                             )}
                           </div>
                         </div>
-                      ))}
+                      );
+                    })}
                     </div>
                   )}
                 </div>
@@ -2378,7 +3650,7 @@ function App() {
                                   </p>
                                 ) : channelVideos.length > 0 ? (
                                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px' }}>
-                                    {channelVideos.map(video => (
+                                    {channelVideos.filter(v => v.title && v.title.toLowerCase().includes(playlistSearchQuery.toLowerCase())).map(video => (
                                       <div
                                         key={video.id}
                                         onClick={() => setActivePlayer(prev => ({ ...prev, videoId: video.id, type: 'video' }))}
@@ -2644,6 +3916,7 @@ function App() {
                                         <img 
                                           src={activePlayer.channel.avatar_url} 
                                           alt="LIVE" 
+                                          referrerPolicy="no-referrer"
                                           style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'brightness(0.7)' }}
                                         />
                                         <span style={{ position: 'absolute', bottom: '2px', right: '2px', background: 'var(--primary-red)', color: 'white', fontSize: '0.55rem', fontWeight: 'bold', padding: '1px 3px', borderRadius: '2px' }}>
@@ -2673,86 +3946,101 @@ function App() {
                                   </div>
                                 )}
 
-                                {channelVideos.map((video) => (
-                                  <div 
-                                    key={video.id} 
-                                    className="playlist-video-item"
-                                    onClick={() => {
-                                      // Switch player source
-                                      setActivePlayer(prev => ({
-                                        ...prev,
-                                        type: 'video',
-                                        videoId: video.id
-                                      }));
-                                    }}
-                                    style={{
-                                      display: 'flex',
-                                      gap: '10px',
-                                      background: activePlayer.type === 'video' && activePlayer.videoId === video.id ? 'rgba(255, 59, 48, 0.08)' : 'rgba(255,255,255,0.01)',
-                                      border: activePlayer.type === 'video' && activePlayer.videoId === video.id ? '1px solid rgba(255, 59, 48, 0.3)' : '1px solid var(--card-border)',
-                                      borderRadius: '8px',
-                                      padding: '8px',
-                                      cursor: 'pointer',
-                                      transition: 'all 0.2s'
-                                    }}
-                                  >
-                                    {video.thumbnail ? (
-                                      <div style={{ position: 'relative', width: '80px', height: '45px', borderRadius: '4px', overflow: 'hidden' }}>
-                                        <img 
-                                          src={video.thumbnail} 
-                                          alt={video.title} 
-                                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                          onError={(e) => {
-                                            e.target.style.display = 'none';
-                                            const fallback = e.target.parentNode.querySelector('.video-thumb-fallback');
-                                            if (fallback) fallback.style.display = 'flex';
-                                          }}
-                                        />
-                                        {(video.is_live || (video.title && (video.title.toLowerCase().includes('live') || video.title.toLowerCase().includes('toos') || video.title.toLowerCase().includes('stream')))) && (
-                                          <span style={{ position: 'absolute', top: '2px', right: '2px', background: 'var(--primary-red)', color: 'white', fontSize: '0.5rem', fontWeight: 'bold', padding: '1px 3px', borderRadius: '2px', zIndex: 5 }}>
-                                            LIVE
-                                          </span>
-                                        )}
-                                      </div>
-                                    ) : null}
+                                {channelVideos.filter(v => v.title && v.title.toLowerCase().includes(playlistSearchQuery.toLowerCase())).map((video) => {
+                                  const elapsed = videoProgress[video.id] || 0;
+                                  const total = durationStringToSeconds(video.duration);
+                                  const pct = total > 0 ? Math.min((elapsed / total) * 100, 100) : 0;
+                                  return (
                                     <div 
-                                      className="video-thumb-fallback"
-                                      style={{ 
-                                        width: '80px', 
-                                        height: '45px', 
-                                        borderRadius: '4px', 
-                                        background: 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%)', 
-                                        border: '1px solid var(--card-border)',
-                                        display: video.thumbnail ? 'none' : 'flex', 
-                                        alignItems: 'center', 
-                                        justifyContent: 'center',
-                                        color: 'var(--text-muted)',
-                                        fontWeight: 'bold',
-                                        fontSize: '0.65rem'
+                                      key={video.id} 
+                                      className="playlist-video-item"
+                                      onClick={() => {
+                                        // Switch player source
+                                        setActivePlayer(prev => ({
+                                          ...prev,
+                                          type: 'video',
+                                          videoId: video.id
+                                        }));
+                                      }}
+                                      style={{
+                                        display: 'flex',
+                                        gap: '10px',
+                                        background: activePlayer.type === 'video' && activePlayer.videoId === video.id ? 'rgba(255, 59, 48, 0.08)' : 'rgba(255,255,255,0.01)',
+                                        border: activePlayer.type === 'video' && activePlayer.videoId === video.id ? '1px solid rgba(255, 59, 48, 0.3)' : '1px solid var(--card-border)',
+                                        borderRadius: '8px',
+                                        padding: '8px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s'
                                       }}
                                     >
-                                      {activePlayer.channel.platform === 'tiktok' ? 'TIKTOK' : 'VIDEO'}
-                                    </div>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                      <div style={{
-                                        fontSize: '0.8rem',
-                                        fontWeight: 700,
-                                        color: activePlayer.videoId === video.id ? 'white' : 'var(--text-white)',
-                                        textOverflow: 'ellipsis',
-                                        overflow: 'hidden',
-                                        display: '-webkit-box',
-                                        WebkitLineClamp: 2,
-                                        WebkitBoxOrient: 'vertical',
-                                        lineHeight: '1.2'
-                                      }}>
-                                        {video.title}
+                                      {video.thumbnail ? (
+                                        <div style={{ position: 'relative', width: '80px', height: '45px', borderRadius: '4px', overflow: 'hidden' }}>
+                                          <img 
+                                            src={video.thumbnail} 
+                                            alt={video.title} 
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            onError={(e) => {
+                                              e.target.style.display = 'none';
+                                              const fallback = e.target.parentNode.querySelector('.video-thumb-fallback');
+                                              if (fallback) fallback.style.display = 'flex';
+                                            }}
+                                          />
+                                          {(video.is_live || (video.title && (video.title.toLowerCase().includes('live') || video.title.toLowerCase().includes('toos') || video.title.toLowerCase().includes('stream')))) && (
+                                            <span style={{ position: 'absolute', top: '2px', right: '2px', background: 'var(--primary-red)', color: 'white', fontSize: '0.5rem', fontWeight: 'bold', padding: '1px 3px', borderRadius: '2px', zIndex: 5 }}>
+                                              LIVE
+                                            </span>
+                                          )}
+                                          {video.duration && (
+                                            <span style={{ position: 'absolute', bottom: '2px', right: '2px', background: 'rgba(0, 0, 0, 0.85)', color: 'white', fontSize: '0.55rem', fontWeight: 'bold', padding: '1px 3px', borderRadius: '2px', zIndex: 5 }}>
+                                              {elapsed > 0 ? `${formatDuration(elapsed)} / ${video.duration}` : video.duration}
+                                            </span>
+                                          )}
+                                          {pct > 0 && (
+                                            <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '3px', background: 'rgba(255, 255, 255, 0.2)', zIndex: 10 }}>
+                                              <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent-primary)', transition: 'width 0.2s ease' }} />
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : null}
+                                      <div 
+                                        className="video-thumb-fallback"
+                                        style={{ 
+                                          width: '80px', 
+                                          height: '45px', 
+                                          borderRadius: '4px', 
+                                          background: 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%)', 
+                                          border: '1px solid var(--card-border)',
+                                          display: video.thumbnail ? 'none' : 'flex', 
+                                          alignItems: 'center', 
+                                          justifyContent: 'center',
+                                          color: 'var(--text-muted)',
+                                          fontWeight: 'bold',
+                                          fontSize: '0.65rem'
+                                        }}
+                                      >
+                                        {activePlayer.channel.platform === 'tiktok' ? 'TIKTOK' : 'VIDEO'}
                                       </div>
-                                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                                        {video.published ? new Date(video.published).toLocaleDateString() : ''}
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{
+                                          fontSize: '0.8rem',
+                                          fontWeight: 700,
+                                          color: activePlayer.videoId === video.id ? 'white' : 'var(--text-white)',
+                                          textOverflow: 'ellipsis',
+                                          overflow: 'hidden',
+                                          display: '-webkit-box',
+                                          WebkitLineClamp: 2,
+                                          WebkitBoxOrient: 'vertical',
+                                          lineHeight: '1.2'
+                                        }}>
+                                          {video.title}
+                                        </div>
+                                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                          {video.published ? new Date(video.published).toLocaleDateString() : ''}
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
@@ -2762,6 +4050,7 @@ function App() {
                   )}
                 </>
               )}
+            </div>
             </div>
           </div>
         </div>
