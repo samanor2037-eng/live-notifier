@@ -1,12 +1,26 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import DOMPurify from 'dompurify';
 import {
   Bell, BellOff, Settings, Home, Video, Plus, Trash2,
   Mail, Shield, RefreshCw, AlertCircle, Youtube, CheckCircle2, Play,
   Eye, EyeOff, ListVideo, GripVertical, Maximize, Minimize,
   Sun, Moon, LogOut, User, ChevronDown, Music2, Volume2, VolumeX,
-  FileText
+  FileText, Bold, Italic, Underline, Strikethrough, Subscript,
+  Superscript, Baseline, Highlighter
 } from 'lucide-react';
+
+// Allowed HTML for rich-text video notes (formatting only, no scripts/links/media)
+const NOTE_HTML_SANITIZE_CONFIG = {
+  ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'u', 's', 'strike', 'sub', 'sup', 'span', 'font', 'br', 'div', 'p'],
+  ALLOWED_ATTR: ['style', 'color', 'face', 'size'],
+};
+const sanitizeNoteHtml = (html) => DOMPurify.sanitize(html || '', NOTE_HTML_SANITIZE_CONFIG);
+const getNoteHtmlPlainText = (html) => {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html || '';
+  return tmp.textContent || tmp.innerText || '';
+};
 
 // Permissions delegated to TikTok embed iframes (set directly in JSX so they
 // are present before the iframe's first navigation).
@@ -407,6 +421,8 @@ function App() {
   const [activePlayer, setActivePlayer] = useState(null); // { channel, type: 'live' | 'video', videoId }
   const [notes, setNotes] = useState([]);
   const [newNoteText, setNewNoteText] = useState('');
+  const noteEditorRef = useRef(null);
+  const [noteActiveFormats, setNoteActiveFormats] = useState({});
   const ytPlayerRef = useRef(null);
   
   // Expanded Player features states
@@ -1387,10 +1403,48 @@ function App() {
     }
   };
 
+  // Apply a rich-text formatting command to the current note editor selection
+  const execNoteCommand = (command, value = null) => {
+    document.execCommand(command, false, value);
+    if (noteEditorRef.current) {
+      setNewNoteText(noteEditorRef.current.innerHTML);
+    }
+    updateNoteActiveFormats();
+  };
+
+  // Font size needs a value-based workaround since execCommand only accepts sizes 1-7
+  const applyNoteFontSize = (px) => {
+    if (!px) return;
+    document.execCommand('fontSize', false, '7');
+    const editor = noteEditorRef.current;
+    if (editor) {
+      editor.querySelectorAll('font[size="7"]').forEach((el) => {
+        el.removeAttribute('size');
+        el.style.fontSize = `${px}px`;
+      });
+      setNewNoteText(editor.innerHTML);
+    }
+  };
+
+  const updateNoteActiveFormats = () => {
+    try {
+      setNoteActiveFormats({
+        bold: document.queryCommandState('bold'),
+        italic: document.queryCommandState('italic'),
+        underline: document.queryCommandState('underline'),
+        strikeThrough: document.queryCommandState('strikeThrough'),
+        subscript: document.queryCommandState('subscript'),
+        superscript: document.queryCommandState('superscript'),
+      });
+    } catch (err) {
+      // queryCommandState can throw if the editor isn't focused yet; ignore
+    }
+  };
+
   // Add a note with the current timestamp
   const handleAddNote = async (e) => {
     if (e) e.preventDefault();
-    if (!newNoteText.trim() || !activePlayer) return;
+    if (!activePlayer || !getNoteHtmlPlainText(newNoteText).trim()) return;
 
     let timestampSeconds = 0;
     // Only get timestamp if it's a recorded video and player is ready
@@ -1409,11 +1463,12 @@ function App() {
           channel_id: activePlayer.channel.id,
           video_id: activePlayer.videoId,
           timestamp_seconds: timestampSeconds,
-          note_text: newNoteText.trim()
+          note_text: sanitizeNoteHtml(newNoteText)
         }
       ]);
       if (error) throw error;
       setNewNoteText('');
+      if (noteEditorRef.current) noteEditorRef.current.innerHTML = '';
       // Reset any auto-expanded textarea heights back to defaults
       document.querySelectorAll('.note-input-overlay textarea, .player-modal-body textarea').forEach(el => {
         el.style.height = el.classList.contains('overlay-textarea') ? '36px' : '40px';
@@ -3910,9 +3965,10 @@ function App() {
                                           NOTE
                                         </span>
                                       )}
-                                      <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-white)', wordBreak: 'break-word', flex: 1, lineHeight: '1.4' }}>
-                                        {note.note_text}
-                                      </p>
+                                      <p
+                                        style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-white)', wordBreak: 'break-word', flex: 1, lineHeight: '1.4' }}
+                                        dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(note.note_text) }}
+                                      />
                                     </div>
                                     <button 
                                       type="button" 
@@ -3931,23 +3987,88 @@ function App() {
                           {/* Note Form (Only if position is Sidebar) */}
                           {noteInputPosition === 'sidebar' && (
                             <form onSubmit={handleAddNote} className="sidebar-note-form">
+                              <div className="note-format-toolbar">
+                                <select
+                                  className="note-toolbar-select"
+                                  title="Font"
+                                  defaultValue=""
+                                  onChange={(e) => { if (e.target.value) execNoteCommand('fontName', e.target.value); e.target.value = ''; }}
+                                >
+                                  <option value="" disabled>Font</option>
+                                  <option value="Arial">Arial</option>
+                                  <option value="Georgia">Georgia</option>
+                                  <option value="'Courier New', monospace">Courier New</option>
+                                  <option value="'Times New Roman', serif">Times New Roman</option>
+                                  <option value="Verdana">Verdana</option>
+                                </select>
+                                <select
+                                  className="note-toolbar-select note-toolbar-select-sm"
+                                  title="Font size"
+                                  defaultValue=""
+                                  onChange={(e) => { if (e.target.value) applyNoteFontSize(e.target.value); e.target.value = ''; }}
+                                >
+                                  <option value="" disabled>Size</option>
+                                  <option value="12">12</option>
+                                  <option value="14">14</option>
+                                  <option value="16">16</option>
+                                  <option value="18">18</option>
+                                  <option value="20">20</option>
+                                  <option value="24">24</option>
+                                  <option value="28">28</option>
+                                  <option value="32">32</option>
+                                </select>
+                                <button type="button" className={`note-toolbar-btn ${noteActiveFormats.bold ? 'active' : ''}`} title="Bold" onMouseDown={(e) => e.preventDefault()} onClick={() => execNoteCommand('bold')}>
+                                  <Bold size={14} />
+                                </button>
+                                <button type="button" className={`note-toolbar-btn ${noteActiveFormats.italic ? 'active' : ''}`} title="Italic" onMouseDown={(e) => e.preventDefault()} onClick={() => execNoteCommand('italic')}>
+                                  <Italic size={14} />
+                                </button>
+                                <button type="button" className={`note-toolbar-btn ${noteActiveFormats.underline ? 'active' : ''}`} title="Underline" onMouseDown={(e) => e.preventDefault()} onClick={() => execNoteCommand('underline')}>
+                                  <Underline size={14} />
+                                </button>
+                                <button type="button" className={`note-toolbar-btn ${noteActiveFormats.strikeThrough ? 'active' : ''}`} title="Strikethrough" onMouseDown={(e) => e.preventDefault()} onClick={() => execNoteCommand('strikeThrough')}>
+                                  <Strikethrough size={14} />
+                                </button>
+                                <button type="button" className={`note-toolbar-btn ${noteActiveFormats.subscript ? 'active' : ''}`} title="Subscript" onMouseDown={(e) => e.preventDefault()} onClick={() => execNoteCommand('subscript')}>
+                                  <Subscript size={14} />
+                                </button>
+                                <button type="button" className={`note-toolbar-btn ${noteActiveFormats.superscript ? 'active' : ''}`} title="Superscript" onMouseDown={(e) => e.preventDefault()} onClick={() => execNoteCommand('superscript')}>
+                                  <Superscript size={14} />
+                                </button>
+                                <label className="note-toolbar-color" title="Font color">
+                                  <Baseline size={14} />
+                                  <input type="color" defaultValue="#ffffff" onChange={(e) => execNoteCommand('foreColor', e.target.value)} />
+                                </label>
+                                <label className="note-toolbar-color" title="Highlight color">
+                                  <Highlighter size={14} />
+                                  <input type="color" defaultValue="#ffff00" onChange={(e) => execNoteCommand('hiliteColor', e.target.value)} />
+                                </label>
+                              </div>
                               <div className="note-input-wrapper">
-                                <textarea 
-                                  className="sidebar-textarea" 
-                                  placeholder={t('writeNotePlaceholder')}
-                                  value={newNoteText}
-                                  onChange={(e) => {
-                                    setNewNoteText(e.target.value);
-                                    e.target.style.height = '44px';
-                                    e.target.style.height = `${e.target.scrollHeight}px`;
+                                <div
+                                  ref={noteEditorRef}
+                                  className="sidebar-textarea sidebar-rich-editor"
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  role="textbox"
+                                  aria-multiline="true"
+                                  data-placeholder={t('writeNotePlaceholder')}
+                                  onInput={(e) => {
+                                    const el = e.currentTarget;
+                                    if (!el.textContent.trim() && !el.querySelector('img')) {
+                                      el.innerHTML = '';
+                                    }
+                                    setNewNoteText(el.innerHTML);
                                   }}
+                                  onFocus={updateNoteActiveFormats}
+                                  onKeyUp={updateNoteActiveFormats}
+                                  onMouseUp={updateNoteActiveFormats}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter' && !e.shiftKey) {
                                       e.preventDefault();
                                       handleAddNote(e);
                                     }
                                   }}
-                                  required
                                 />
                                 <button type="submit" className="note-submit-btn">
                                   <Plus size={18} />
