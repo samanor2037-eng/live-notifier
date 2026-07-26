@@ -1469,10 +1469,6 @@ function App() {
       if (error) throw error;
       setNewNoteText('');
       if (noteEditorRef.current) noteEditorRef.current.innerHTML = '';
-      // Reset any auto-expanded textarea heights back to defaults
-      document.querySelectorAll('.note-input-overlay textarea, .player-modal-body textarea').forEach(el => {
-        el.style.height = el.classList.contains('overlay-textarea') ? '36px' : '40px';
-      });
       fetchNotes(activePlayer.channel.id, activePlayer.videoId);
       showToast(t('toastNoteSaved'));
     } catch (err) {
@@ -3830,8 +3826,8 @@ function App() {
 
                       {/* Floating Note Input Overlay (Only for recorded videos and when position is overlay) */}
                       {noteInputPosition === 'overlay' && activePlayer.type === 'video' && (
-                        <form 
-                          onSubmit={handleAddNote} 
+                        <form
+                          onSubmit={handleAddNote}
                           className="note-input-overlay"
                           style={{
                             position: 'absolute',
@@ -3840,50 +3836,101 @@ function App() {
                             margin: 0
                           }}
                         >
-                          <div 
-                            className="drag-handle" 
-                            onMouseDown={handleDragMouseDown}
-                            onTouchStart={handleDragTouchStart}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'move', width: '20px', height: '36px', color: 'rgba(255,255,255,0.4)', userSelect: 'none' }}
-                          >
-                            <GripVertical size={16} />
+                          <div className="note-format-toolbar">
+                            <select
+                              className="note-toolbar-select"
+                              title="Font"
+                              defaultValue=""
+                              onChange={(e) => { if (e.target.value) execNoteCommand('fontName', e.target.value); e.target.value = ''; }}
+                            >
+                              <option value="" disabled>Font</option>
+                              <option value="Arial">Arial</option>
+                              <option value="Georgia">Georgia</option>
+                              <option value="'Courier New', monospace">Courier New</option>
+                              <option value="'Times New Roman', serif">Times New Roman</option>
+                              <option value="Verdana">Verdana</option>
+                            </select>
+                            <select
+                              className="note-toolbar-select note-toolbar-select-sm"
+                              title="Font size"
+                              defaultValue=""
+                              onChange={(e) => { if (e.target.value) applyNoteFontSize(e.target.value); e.target.value = ''; }}
+                            >
+                              <option value="" disabled>Size</option>
+                              <option value="12">12</option>
+                              <option value="14">14</option>
+                              <option value="16">16</option>
+                              <option value="18">18</option>
+                              <option value="20">20</option>
+                              <option value="24">24</option>
+                              <option value="28">28</option>
+                              <option value="32">32</option>
+                            </select>
+                            <button type="button" className={`note-toolbar-btn ${noteActiveFormats.bold ? 'active' : ''}`} title="Bold" onMouseDown={(e) => e.preventDefault()} onClick={() => execNoteCommand('bold')}>
+                              <Bold size={14} />
+                            </button>
+                            <button type="button" className={`note-toolbar-btn ${noteActiveFormats.italic ? 'active' : ''}`} title="Italic" onMouseDown={(e) => e.preventDefault()} onClick={() => execNoteCommand('italic')}>
+                              <Italic size={14} />
+                            </button>
+                            <button type="button" className={`note-toolbar-btn ${noteActiveFormats.underline ? 'active' : ''}`} title="Underline" onMouseDown={(e) => e.preventDefault()} onClick={() => execNoteCommand('underline')}>
+                              <Underline size={14} />
+                            </button>
+                            <button type="button" className={`note-toolbar-btn ${noteActiveFormats.strikeThrough ? 'active' : ''}`} title="Strikethrough" onMouseDown={(e) => e.preventDefault()} onClick={() => execNoteCommand('strikeThrough')}>
+                              <Strikethrough size={14} />
+                            </button>
+                            <button type="button" className={`note-toolbar-btn ${noteActiveFormats.subscript ? 'active' : ''}`} title="Subscript" onMouseDown={(e) => e.preventDefault()} onClick={() => execNoteCommand('subscript')}>
+                              <Subscript size={14} />
+                            </button>
+                            <button type="button" className={`note-toolbar-btn ${noteActiveFormats.superscript ? 'active' : ''}`} title="Superscript" onMouseDown={(e) => e.preventDefault()} onClick={() => execNoteCommand('superscript')}>
+                              <Superscript size={14} />
+                            </button>
+                            <label className="note-toolbar-color" title="Font color">
+                              <Baseline size={14} />
+                              <input type="color" defaultValue="#ffffff" onChange={(e) => execNoteCommand('foreColor', e.target.value)} />
+                            </label>
+                            <label className="note-toolbar-color" title="Highlight color">
+                              <Highlighter size={14} />
+                              <input type="color" defaultValue="#ffff00" onChange={(e) => execNoteCommand('hiliteColor', e.target.value)} />
+                            </label>
                           </div>
-                          <textarea 
-                            className="input-field overlay-textarea" 
-                            placeholder={t('writeNotePlaceholder')}
-                            value={newNoteText}
-                            onChange={(e) => {
-                              setNewNoteText(e.target.value);
-                              e.target.style.height = '36px';
-                              e.target.style.height = `${e.target.scrollHeight}px`;
-                            }}
-                            style={{ 
-                              margin: 0, 
-                              flex: 1, 
-                              height: '36px', 
-                              minHeight: '36px',
-                              fontSize: '0.85rem',
-                              resize: 'none',
-                              lineHeight: '1.3',
-                              padding: '8px 12px',
-                              background: 'var(--surface-solid)',
-                              border: 'none',
-                              borderRadius: '6px',
-                              color: '#fff',
-                              outline: 'none',
-                              overflow: 'hidden'
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                handleAddNote(e);
-                              }
-                            }}
-                            required
-                          />
-                          <button type="submit" className="btn btn-primary" style={{ padding: '0 10px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Plus size={16} />
-                          </button>
+                          <div className="note-input-overlay-row">
+                            <div
+                              className="drag-handle"
+                              onMouseDown={handleDragMouseDown}
+                              onTouchStart={handleDragTouchStart}
+                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'move', width: '20px', height: '36px', color: 'rgba(255,255,255,0.4)', userSelect: 'none' }}
+                            >
+                              <GripVertical size={16} />
+                            </div>
+                            <div
+                              ref={noteEditorRef}
+                              className="input-field overlay-textarea overlay-rich-editor"
+                              contentEditable
+                              suppressContentEditableWarning
+                              role="textbox"
+                              aria-multiline="true"
+                              data-placeholder={t('writeNotePlaceholder')}
+                              onInput={(e) => {
+                                const el = e.currentTarget;
+                                if (!el.textContent.trim() && !el.querySelector('img')) {
+                                  el.innerHTML = '';
+                                }
+                                setNewNoteText(el.innerHTML);
+                              }}
+                              onFocus={updateNoteActiveFormats}
+                              onKeyUp={updateNoteActiveFormats}
+                              onMouseUp={updateNoteActiveFormats}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  handleAddNote(e);
+                                }
+                              }}
+                            />
+                            <button type="submit" className="btn btn-primary" style={{ padding: '0 10px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Plus size={16} />
+                            </button>
+                          </div>
                         </form>
                       )}
                     </div>

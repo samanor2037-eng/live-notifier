@@ -841,8 +841,9 @@ label {
   position: absolute;
   z-index: 100;
   display: flex;
-  align-items: flex-end;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
   background: var(--overlay-glass);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -855,6 +856,17 @@ label {
   animation: overlay-fade-in 0.25s ease-out;
 }
 
+.note-input-overlay .note-format-toolbar {
+  margin-bottom: 6px;
+  background: transparent;
+}
+
+.note-input-overlay-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
 @keyframes overlay-fade-in {
   from { opacity: 0; transform: translateY(10px) scale(0.95); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -862,6 +874,31 @@ label {
 
 .note-input-overlay .input-field {
   color: var(--text-white) !important;
+}
+
+.overlay-rich-editor {
+  margin: 0;
+  flex: 1;
+  min-height: 36px;
+  max-height: 140px;
+  overflow-y: auto;
+  font-size: 0.85rem;
+  resize: none;
+  line-height: 1.3;
+  padding: 8px 12px;
+  background: var(--surface-solid);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.overlay-rich-editor:empty:before {
+  content: attr(data-placeholder);
+  color: rgba(255, 255, 255, 0.4);
+  pointer-events: none;
 }
 
 /* Playlist Video Items */
