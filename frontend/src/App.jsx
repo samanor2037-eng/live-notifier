@@ -173,7 +173,7 @@ const translations = {
   toastEnterChannelUrl: { so: 'Fadlan geli link-ga kanaalka (URL)', en: 'Please enter the channel URL' },
   toastDataFound: { so: 'Xogta waa la soo helay!', en: 'Data found!' },
   toastCouldNotFetchData: { so: 'Ma awoodo inaan soo qabto xogta', en: 'Could not fetch the data' },
-  toastServerDown: { so: 'Server-ka (Port 5001) ma shaqaynayo', en: 'The server (Port 5001) is not responding' },
+  toastServerDown: { so: 'Server-ka ma shaqaynayo', en: 'The server is not responding' },
   toastCheckUrlFirst: { so: 'Fadlan marka hore hubi oo soo qabo xogta', en: 'Please check the link first to fetch the data' },
   toastFillAllFields: { so: 'Fadlan buuxi dhammaan meelaha banaan', en: 'Please fill in all fields' },
   toastChannelAdded: { so: 'Kanaalka waa la daray. Hubinta heerka ayaa bilaabatay...', en: 'Channel added. Checking its status now...' },
@@ -189,7 +189,7 @@ const translations = {
   toastSettingsSaved: { so: 'Settings-ka waa la kaydiyay!', en: 'Settings saved!' },
   toastSettingsSaveFail: { so: 'Fashil: Kaydinta settings-ka', en: 'Failed to save settings' },
   toastCheckStarted: { so: 'Hubinta hadda waa la bilaabay!', en: 'Check started!' },
-  toastServerUnreachable: { so: 'Ma awoodo inaan la xiriiro Server-ka (Port 5001)', en: 'Could not reach the server (Port 5001)' },
+  toastServerUnreachable: { so: 'Ma awoodo inaan la xiriiro Server-ka', en: 'Could not reach the server' },
   toastTestEmailSent: { so: 'Email tijaabo ah ayaa laguu soo diray!', en: 'A test email has been sent to you!' },
   toastInvalidTikTokLink: { so: 'Link-ga TikTok ma ahan mid sax ah', en: 'That TikTok link is not valid' },
   toastErrorPrefix: { so: 'Cillad', en: 'Error' },
@@ -293,6 +293,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [isConfigured, setIsConfigured] = useState(false);
+  const [serverStatus, setServerStatus] = useState('connecting'); // 'connecting', 'ready', 'offline'
   const [theme, setTheme] = useState(() => {
     try {
       const stored = localStorage.getItem('veonotes-theme');
@@ -679,12 +680,21 @@ function App() {
     };
   }, [activePlayer, isTrackingLive]);
 
-  // Initialize Supabase Client dynamically from backend config and check email config
+  // Initialize Supabase Client dynamically from backend config and check email config with auto-retry
   useEffect(() => {
+    let active = true;
+    let configRetryTimer = null;
+    let healthRetryTimer = null;
+    let retryCount = 0;
+
     const loadConfig = async () => {
       try {
         const res = await fetch(`${API_URL}/api/config`);
+        if (!res.ok) throw new Error("Config request failed");
         const data = await res.json();
+        
+        if (!active) return;
+
         if (data.supabaseUrl && data.supabaseKey && !data.supabaseUrl.includes('your-supabase')) {
           if (!cachedSupabase || cachedSupabase.supabaseUrl !== data.supabaseUrl || cachedSupabase.supabaseKey !== data.supabaseKey) {
             cachedSupabase = createClient(data.supabaseUrl, data.supabaseKey);
@@ -696,31 +706,61 @@ function App() {
           }
           setSupabase(cachedSupabase);
           setIsConfigured(true);
+          setServerStatus('ready');
         } else {
           setSupabase(null);
           setIsConfigured(false);
+          setServerStatus('ready'); // Server is reachable but not fully configured in env yet
         }
       } catch (err) {
         console.error("Failed to fetch Supabase config from backend:", err);
-        setSupabase(null);
-        setIsConfigured(false);
+        if (active) {
+          setSupabase(null);
+          setIsConfigured(false);
+          
+          retryCount += 1;
+          // Render free-tier cold starts can take up to ~60s, so keep retrying
+          // for a while before giving up and telling the user it's offline.
+          if (retryCount >= 15) {
+            setServerStatus('offline');
+          } else {
+            setServerStatus('connecting');
+          }
+
+          // Retry config fetch after 5 seconds
+          configRetryTimer = setTimeout(loadConfig, 5000);
+        }
       }
     };
 
     const checkHealth = async () => {
       try {
         const res = await fetch(`${API_URL}/api/health`);
+        if (!res.ok) throw new Error("Health request failed");
         const data = await res.json();
+        
+        if (!active) return;
+
         if (data.status === 'ok') {
           setIsEmailConfigured(!!data.emailConfigured);
         }
       } catch (err) {
         console.error("Failed to fetch backend health status:", err);
+        if (active) {
+          // Retry health check after 5 seconds
+          healthRetryTimer = setTimeout(checkHealth, 5000);
+        }
       }
     };
 
     loadConfig();
     checkHealth();
+
+    return () => {
+      active = false;
+      if (configRetryTimer) clearTimeout(configRetryTimer);
+      if (healthRetryTimer) clearTimeout(healthRetryTimer);
+    };
   }, [activeTab]);
 
   // Monitor session and Google Sign-in state
@@ -1894,6 +1934,52 @@ function App() {
             </p>
           </div>
 
+          {/* Server connection status alert */}
+          {serverStatus === 'connecting' && (
+            <div className="server-status-banner" style={{
+              background: 'rgba(234, 179, 8, 0.1)',
+              border: '1px solid rgba(234, 179, 8, 0.2)',
+              color: '#eab308',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              fontSize: '0.85rem',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              lineHeight: '1.4'
+            }}>
+              <RefreshCw size={16} className="spin" style={{ flexShrink: 0 }} />
+              <span>
+                {language === 'so'
+                  ? 'Server-ka ayaa la kicinayaa (wuxuu qaadan karaa 1 daqiiqo)...'
+                  : 'Server is waking up (this may take up to 1 minute)...'}
+              </span>
+            </div>
+          )}
+          {serverStatus === 'offline' && (
+            <div className="server-status-banner" style={{
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              color: '#ef4444',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              fontSize: '0.85rem',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              lineHeight: '1.4'
+            }}>
+              <AlertCircle size={16} style={{ flexShrink: 0 }} />
+              <span>
+                {language === 'so'
+                  ? 'Server-ka waa offline. Fadlan hubi inuu shaqaynayo.'
+                  : 'Server is offline. Please make sure the backend is running.'}
+              </span>
+            </div>
+          )}
+
           <form onSubmit={authMode === 'forgot' ? handleForgotPassword : handleEmailAuth} style={{ marginBottom: '24px' }}>
             <div className="form-group" style={{ marginBottom: authMode === 'forgot' ? '20px' : '16px' }}>
               <label>{t('emailLabel')}</label>
@@ -1930,7 +2016,7 @@ function App() {
               </div>
             )}
 
-            <button type="submit" className="btn btn-primary w-full" disabled={isLoading || isSendingReset} style={{ width: '100%', padding: '14px', borderRadius: '8px', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            <button type="submit" className="btn btn-primary w-full" disabled={isLoading || isSendingReset || serverStatus !== 'ready'} style={{ width: '100%', padding: '14px', borderRadius: '8px', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
               {authMode === 'forgot'
                 ? (isSendingReset ? t('pleaseWait') : t('sendResetLink'))
                 : (isLoading ? t('pleaseWait') : authMode === 'login' ? t('loginBtn') : t('signupBtn'))}
@@ -1971,7 +2057,7 @@ function App() {
                 <div style={{ flex: 1, height: '1px', background: 'var(--card-border)' }}></div>
               </div>
 
-              <button type="button" className="btn btn-action w-full flex items-center justify-center gap-3 py-3" onClick={handleGoogleLogin} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '14px', borderRadius: '8px', fontSize: '1rem', border: '1px solid var(--card-border)' }}>
+              <button type="button" className="btn btn-action w-full flex items-center justify-center gap-3 py-3" onClick={handleGoogleLogin} disabled={serverStatus !== 'ready'} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '14px', borderRadius: '8px', fontSize: '1rem', border: '1px solid var(--card-border)', opacity: serverStatus !== 'ready' ? 0.6 : 1, cursor: serverStatus !== 'ready' ? 'not-allowed' : 'pointer' }}>
                 <svg className="w-5 h-5" viewBox="0 0 24 24" width="20" height="20">
                   <path fill="currentColor" d="M12.24 10.285V14.4h6.887C18.2 16.614 15.645 18 12.24 18c-3.86 0-7-3.14-7-7s3.14-7 7-7c1.706 0 3.257.618 4.47 1.637l3.202-3.202C17.996 1.054 15.26 0 12.24 0 5.58 0 0 5.58 0 12.24s5.58 12.24 12.24 12.24c6.76 0 11.76-4.76 11.76-11.76 0-.796-.08-1.571-.22-2.315h-11.54z"/>
                 </svg>
