@@ -794,3 +794,19 @@ app.get('/api/channel-videos', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Backend server listening on port ${PORT}`);
 });
+
+// Self-ping to keep the Render free-tier instance awake. Render spins the
+// service down after ~15 minutes with no inbound HTTP traffic; pinging our
+// own public URL from inside the running process counts as inbound traffic
+// and resets that timer, so once the app is up it never goes idle again.
+// RENDER_EXTERNAL_URL is only set on Render, so this is a no-op locally.
+const SELF_PING_URL = process.env.RENDER_EXTERNAL_URL;
+if (SELF_PING_URL) {
+  const SELF_PING_INTERVAL_MS = 10 * 60 * 1000;
+  setInterval(() => {
+    fetch(`${SELF_PING_URL}/api/health`).catch((err) => {
+      console.error('Self-ping failed:', err.message);
+    });
+  }, SELF_PING_INTERVAL_MS);
+  console.log(`Self-ping keep-alive enabled for ${SELF_PING_URL}`);
+}
