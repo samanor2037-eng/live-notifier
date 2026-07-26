@@ -770,8 +770,8 @@ app.get('/api/channel-videos', async (req, res) => {
 
 // Start Background Polling Interval
 (async () => {
-  let intervalMs = 5000; // 5 seconds default
-  
+  let intervalMs = 300000; // 5 minutes default
+
   if (supabase) {
     try {
       const { data } = await supabase.from('settings').select('*').eq('key', 'app_config').single();
@@ -781,11 +781,22 @@ app.get('/api/channel-videos', async (req, res) => {
     } catch (e) {
       console.log("Could not load polling interval from database. Using default 5 mins.");
     }
-    
+
     console.log(`Background polling engine started. Interval: ${intervalMs / 1000} seconds.`);
-    // Run initial check on server start
-    checkAllChannels();
-    setInterval(checkAllChannels, intervalMs);
+
+    // Reschedule after each run finishes (instead of a fixed setInterval) so that
+    // if a check ever takes longer than intervalMs, runs never pile up and
+    // compete with each other and with regular API requests for the event loop.
+    const scheduleNextCheck = async () => {
+      try {
+        await checkAllChannels();
+      } catch (e) {
+        console.error('checkAllChannels failed:', e.message);
+      } finally {
+        setTimeout(scheduleNextCheck, intervalMs);
+      }
+    };
+    scheduleNextCheck();
   } else {
     console.log("Supabase not configured. Background polling will start once environment variables are set.");
   }
