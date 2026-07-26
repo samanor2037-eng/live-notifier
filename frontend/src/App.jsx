@@ -121,6 +121,16 @@ const translations = {
   orDivider: { so: 'AMA', en: 'OR' },
   googleSignIn: { so: 'Geli Akoonka Google (Sign In)', en: 'Sign in with Google' },
   googleNote: { so: '* Xusuusin: Google Sign-in wuxuu u baahan yahay in laga shido Supabase Dashboard-kaaga.', en: '* Note: Google Sign-in must be enabled in your Supabase Dashboard.' },
+  landingLoginBtn: { so: 'Soo Gal', en: 'Log In' },
+  landingGetStarted: { so: 'Bilaw Bilaash ah', en: 'Get Started Free' },
+  landingHeroTitle: { so: 'Weligaa ha ka maqnaan wax cusub oo aad daawan lahayd', en: "Never miss what you're watching for" },
+  landingHeroSubtitle: { so: 'Veonotes wuxuu kuu ogeysiisaa marka dadka aad raacayso ay Live galaan ama muuqaal cusub soo dhigaan — waxaadna qori kartaa qoraallo (notes) muuqaalkasta oo ku saabsan.', en: "Veonotes notifies you the moment people you follow go live or post a new video — and lets you take timestamped, formatted notes on every video." },
+  landingFeature1Title: { so: 'Ogeysiisyo Toos ah', en: 'Live & Upload Alerts' },
+  landingFeature1Body: { so: 'La soco kanaalada YouTube iyo TikTok, oo hel ogeysiis marka ay Live galaan ama muuqaal cusub soo dhigaan.', en: 'Track YouTube and TikTok channels and get notified the moment they go live or upload.' },
+  landingFeature2Title: { so: 'Qoraallo (Notes) leh Waqti', en: 'Timestamped Notes' },
+  landingFeature2Body: { so: 'Qor qoraallo ku xiran daqiiqadda muuqaalka, oo qurxi qoraalkaaga (bold, color, highlight, iyo kale).', en: 'Take notes tied to the exact moment in a video, and format them however you like.' },
+  landingFeature3Title: { so: 'Sii Wad Daawashada', en: 'Continue Watching' },
+  landingFeature3Body: { so: 'App-ku wuu xasuustaa halka aad joogsatay, si aad si fudud ugu sii wadan karto daawashada.', en: 'The app remembers where you left off, so you can pick up right where you stopped.' },
   resetPasswordTitle: { so: 'Beddel Password-ka', en: 'Reset Password' },
   resetPasswordSubtitle: { so: 'Geli password-kaaga cusub.', en: 'Enter your new password.' },
   newPasswordLabel: { so: 'Password Cusub', en: 'New Password' },
@@ -407,6 +417,7 @@ function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authMode, setAuthMode] = useState('login'); // 'login', 'signup', or 'forgot'
+  const [showAuthForm, setShowAuthForm] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState(false);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [newRecoveryPassword, setNewRecoveryPassword] = useState('');
@@ -1964,6 +1975,69 @@ function App() {
     );
   }
 
+  if (!session && !showAuthForm) {
+    return (
+      <div className="landing-page">
+        {toast && (
+          <div className={`toast ${toast.type === 'error' ? 'border-red-500' : 'border-blue-500'}`}>
+            {toast.type === 'error' ? <AlertCircle color="#ff3b30" /> : <CheckCircle2 color="#5E17F5" />}
+            <span>{toast.message}</span>
+          </div>
+        )}
+
+        <header className="landing-header">
+          <div className="landing-logo">
+            <img src="/veonotes-icon-256.png" alt="Veonotes" />
+            <span>Veonotes</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div className="lang-switch">
+              <button type="button" className={language === 'so' ? 'active' : ''} onClick={() => changeLanguage('so')}>SO</button>
+              <button type="button" className={language === 'en' ? 'active' : ''} onClick={() => changeLanguage('en')}>EN</button>
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => { setAuthMode('login'); setShowAuthForm(true); }}
+            >
+              {t('landingLoginBtn')}
+            </button>
+          </div>
+        </header>
+
+        <main className="landing-hero">
+          <h1>{t('landingHeroTitle')}</h1>
+          <p>{t('landingHeroSubtitle')}</p>
+          <button
+            type="button"
+            className="btn btn-primary landing-cta"
+            onClick={() => { setAuthMode('signup'); setShowAuthForm(true); }}
+          >
+            {t('landingGetStarted')}
+          </button>
+        </main>
+
+        <section className="landing-features">
+          <div className="landing-feature-card">
+            <Bell size={26} />
+            <h3>{t('landingFeature1Title')}</h3>
+            <p>{t('landingFeature1Body')}</p>
+          </div>
+          <div className="landing-feature-card">
+            <FileText size={26} />
+            <h3>{t('landingFeature2Title')}</h3>
+            <p>{t('landingFeature2Body')}</p>
+          </div>
+          <div className="landing-feature-card">
+            <Play size={26} />
+            <h3>{t('landingFeature3Title')}</h3>
+            <p>{t('landingFeature3Body')}</p>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   if (!session) {
     return (
       <div className="app-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '20px', position: 'relative' }}>
@@ -1977,6 +2051,13 @@ function App() {
         )}
 
         <div className="glass-card" style={{ maxWidth: '420px', width: '100%', padding: '40px 30px' }}>
+          <button
+            type="button"
+            className="auth-back-link"
+            onClick={() => setShowAuthForm(false)}
+          >
+            {language === 'so' ? '← Ku noqo Bogga hore' : '← Back to home'}
+          </button>
           <div className="text-center" style={{ marginBottom: '30px' }}>
             <img src="/veonotes-icon-256.png" alt="Veonotes" style={{ width: '72px', height: '72px', margin: '0 auto 15px auto', display: 'block' }} />
             <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '10px' }}>Veonotes</h1>
