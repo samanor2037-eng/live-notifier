@@ -363,7 +363,7 @@ async function checkAllChannels() {
               }
 
               if (userMetadata.whatsapp_notifications && userMetadata.whatsapp_number) {
-                targetWhatsApp = userMetadata.whatsapp_number;
+                targetWhatsApp = `${userMetadata.whatsapp_country_code || ''}${userMetadata.whatsapp_number}`;
               }
             }
           } catch (err) {
