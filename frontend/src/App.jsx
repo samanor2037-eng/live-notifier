@@ -3543,10 +3543,10 @@ function App() {
                           type="button"
                           className="input-field"
                           onClick={() => setWhatsappCountryDropdownOpen((o) => !o)}
-                          style={{ margin: 0, width: '64px', fontSize: '1.2rem', cursor: 'pointer', textAlign: 'center' }}
+                          style={{ margin: 0, width: '76px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', textAlign: 'center' }}
                           title={COUNTRY_CODES.find((c) => c.code === whatsappCountryCode)?.name}
                         >
-                          {COUNTRY_CODES.find((c) => c.code === whatsappCountryCode)?.flag || '🏳️'}
+                          {whatsappCountryCode}
                         </button>
                         {whatsappCountryDropdownOpen && (
                           <div style={{
