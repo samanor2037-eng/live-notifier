@@ -342,6 +342,27 @@ async function checkTikTok(username) {
   return { success, isLive, latestVideoUrl, avatar };
 }
 
+// Guards against checkAllChannels() running concurrently with itself. The
+// scheduled background poll and the frontend's on-load /api/check both call
+// it; without this, an overlapping run reads the same still-stale is_live /
+// last_video_url from the DB before the other run has written its update,
+// so both see the same "new" live/upload event and both notify — duplicate
+// emails and WhatsApp messages for one real event.
+let channelsCheckInProgress = false;
+
+async function checkAllChannelsGuarded() {
+  if (channelsCheckInProgress) {
+    console.log('Channel check already in progress, skipping overlapping call.');
+    return { success: true, message: 'Check already in progress' };
+  }
+  channelsCheckInProgress = true;
+  try {
+    return await checkAllChannels();
+  } finally {
+    channelsCheckInProgress = false;
+  }
+}
+
 // Function to poll and update all channels
 async function checkAllChannels() {
   if (!supabase) {
@@ -470,7 +491,7 @@ app.get('/api/health', (req, res) => {
 });
 
 app.post('/api/check', async (req, res) => {
-  const result = await checkAllChannels();
+  const result = await checkAllChannelsGuarded();
   if (result.success) {
     res.json({ success: true, message: "Manual status check completed successfully." });
   } else {
@@ -866,7 +887,7 @@ app.get('/api/channel-videos', async (req, res) => {
     // compete with each other and with regular API requests for the event loop.
     const scheduleNextCheck = async () => {
       try {
-        await checkAllChannels();
+        await checkAllChannelsGuarded();
       } catch (e) {
         console.error('checkAllChannels failed:', e.message);
       } finally {
