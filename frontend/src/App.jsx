@@ -127,7 +127,7 @@ const translations = {
   googleNote: { so: '* Xusuusin: Google Sign-in wuxuu u baahan yahay in laga shido Supabase Dashboard-kaaga.', en: '* Note: Google Sign-in must be enabled in your Supabase Dashboard.' },
   landingLoginBtn: { so: 'Soo Gal', en: 'Log In' },
   landingGetStarted: { so: 'Bilaw Bilaash ah', en: 'Get Started Free' },
-  landingHeroTitle: { so: 'Weligaa ha ka maqnaan wax cusub oo aad daawan lahayd', en: "Never miss what you're watching for" },
+  landingHeroTitle: { so: 'Veonotes: Weligaa ha ka maqnaan wax cusub oo aad daawan lahayd', en: "Veonotes: Never miss what you're watching for" },
   landingHeroSubtitle: { so: 'Veonotes wuxuu kuu ogeysiisaa marka dadka aad raacayso ay Live galaan ama muuqaal cusub soo dhigaan — waxaadna qori kartaa qoraallo (notes) muuqaalkasta oo ku saabsan.', en: "Veonotes notifies you the moment people you follow go live or post a new video — and lets you take timestamped, formatted notes on every video." },
   landingFeature1Title: { so: 'Ogeysiisyo Toos ah', en: 'Live & Upload Alerts' },
   landingFeature1Body: { so: 'La soco kanaalada YouTube iyo TikTok, oo hel ogeysiis marka ay Live galaan ama muuqaal cusub soo dhigaan.', en: 'Track YouTube and TikTok channels and get notified the moment they go live or upload.' },
