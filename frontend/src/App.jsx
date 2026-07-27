@@ -96,9 +96,13 @@ function playChime(toneType = null) {
 // Globally cache Supabase client to avoid creating multiple GoTrueClient instances on HMR/re-mounts
 let cachedSupabase = typeof window !== 'undefined' ? (window.__supabaseClient || null) : null;
 
-// Backend API base URL: set VITE_API_URL in production (e.g. Vercel env vars)
-// to point at the deployed backend; falls back to localhost for local dev.
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+// Backend API base URL. In production this is left empty so requests go to
+// /api/* on the same origin, where a Vercel serverless function (frontend/api/[...path].js)
+// proxies them server-to-server to the Render backend — direct cross-origin
+// browser fetches to the Render URL were intermittently timing out even
+// though the backend itself was healthy. Set VITE_API_URL to override (e.g.
+// to call a backend directly again). Falls back to localhost for local dev.
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:5001');
 
 // UI translations (Somali default, English secondary). Covers the app shell,
 // auth screens, dashboard, add-channel flow, profile, and toast messages.
