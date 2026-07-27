@@ -19,17 +19,12 @@ export const config = {
 };
 
 export default async function handler(req, res) {
-  const { path, ...restQuery } = req.query;
-  const targetPath = Array.isArray(path) ? path.join('/') : (path || '');
-
-  const url = new URL(`${BACKEND_URL}/api/${targetPath}`);
-  for (const [key, value] of Object.entries(restQuery)) {
-    if (Array.isArray(value)) {
-      value.forEach((v) => url.searchParams.append(key, v));
-    } else if (value !== undefined) {
-      url.searchParams.append(key, value);
-    }
-  }
+  // Forward the exact incoming path + query string as-is, rather than
+  // reconstructing it from req.query — more robust than relying on how
+  // Vercel populates the catch-all route's dynamic segment.
+  const incoming = req.url || '/';
+  const afterApi = incoming.replace(/^\/?api\/?/, '');
+  const url = new URL(`${BACKEND_URL}/api/${afterApi}`);
 
   const init = {
     method: req.method,
