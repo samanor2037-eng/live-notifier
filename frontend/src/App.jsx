@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { createClient } from '@supabase/supabase-js';
 import DOMPurify from 'dompurify';
 import {
@@ -461,7 +462,10 @@ function App() {
   const [isVerifyingWhatsAppCode, setIsVerifyingWhatsAppCode] = useState(false);
   const [whatsappCountryDropdownOpen, setWhatsappCountryDropdownOpen] = useState(false);
   const [whatsappCountrySearch, setWhatsappCountrySearch] = useState('');
+  const [whatsappDropdownPos, setWhatsappDropdownPos] = useState({ top: 0, left: 0 });
   const whatsappCountryDropdownRef = useRef(null);
+  const whatsappCountryButtonRef = useRef(null);
+  const whatsappCountryListRef = useRef(null);
 
   // Granular Desktop Notification Preferences (YouTube/TikTok Live/Upload combinations)
   const [desktopYtEnabled, setDesktopYtEnabled] = useState(() => localStorage.getItem('veonotes_desktop_yt_enabled') !== 'false');
@@ -1335,11 +1339,15 @@ function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showNotifications]);
 
-  // Close the WhatsApp country dropdown when clicking outside of it
+  // Close the WhatsApp country dropdown when clicking outside of it (the
+  // list itself is portaled to document.body, so it needs its own ref check
+  // alongside the trigger button's).
   useEffect(() => {
     if (!whatsappCountryDropdownOpen) return;
     const handleClickOutside = (e) => {
-      if (whatsappCountryDropdownRef.current && !whatsappCountryDropdownRef.current.contains(e.target)) {
+      const inButton = whatsappCountryDropdownRef.current && whatsappCountryDropdownRef.current.contains(e.target);
+      const inList = whatsappCountryListRef.current && whatsappCountryListRef.current.contains(e.target);
+      if (!inButton && !inList) {
         setWhatsappCountryDropdownOpen(false);
       }
     };
@@ -3541,29 +3549,38 @@ function App() {
                         </label>
                         <button
                           type="button"
+                          ref={whatsappCountryButtonRef}
                           className="input-field"
-                          onClick={() => setWhatsappCountryDropdownOpen((o) => !o)}
+                          onClick={() => {
+                            if (!whatsappCountryDropdownOpen && whatsappCountryButtonRef.current) {
+                              const rect = whatsappCountryButtonRef.current.getBoundingClientRect();
+                              setWhatsappDropdownPos({ top: rect.bottom + 6, left: rect.left });
+                            }
+                            setWhatsappCountryDropdownOpen((o) => !o);
+                          }}
                           style={{ margin: 0, width: '76px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', textAlign: 'center' }}
                           title={COUNTRY_CODES.find((c) => c.code === whatsappCountryCode)?.name}
                         >
                           {whatsappCountryCode}
                         </button>
-                        {whatsappCountryDropdownOpen && (
-                          <div style={{
-                            position: 'absolute',
-                            top: 'calc(100% + 6px)',
-                            left: 0,
-                            zIndex: 50,
-                            width: '240px',
-                            maxHeight: '280px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            background: 'var(--surface-solid-2, #1a1a2e)',
-                            border: '1px solid var(--card-border)',
-                            borderRadius: '10px',
-                            boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
-                            overflow: 'hidden'
-                          }}>
+                        {whatsappCountryDropdownOpen && createPortal(
+                          <div
+                            ref={whatsappCountryListRef}
+                            style={{
+                              position: 'fixed',
+                              top: whatsappDropdownPos.top,
+                              left: whatsappDropdownPos.left,
+                              zIndex: 9999,
+                              width: '240px',
+                              maxHeight: '280px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              background: 'var(--surface-solid-2, #1a1a2e)',
+                              border: '1px solid var(--card-border)',
+                              borderRadius: '10px',
+                              boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
+                              overflow: 'hidden'
+                            }}>
                             <input
                               type="text"
                               autoFocus
@@ -3608,7 +3625,8 @@ function App() {
                                   </div>
                                 ))}
                             </div>
-                          </div>
+                          </div>,
+                          document.body
                         )}
                       </div>
                       <div style={{ flex: 1, minWidth: '180px' }}>
