@@ -143,7 +143,12 @@ async function sendWhatsAppMessage(phone, text) {
     return { success: false, error: 'Invalid phone number' };
   }
   try {
-    await sock.sendMessage(`${digits}@s.whatsapp.net`, { text });
+    // A stale-but-not-yet-detected connection can leave sendMessage's promise
+    // hanging indefinitely, so bound it instead of trusting isConnected alone.
+    await Promise.race([
+      sock.sendMessage(`${digits}@s.whatsapp.net`, { text }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('WhatsApp send timed out')), 20000)),
+    ]);
     return { success: true };
   } catch (err) {
     console.error(`Failed to send WhatsApp message to ${digits}:`, err.message);
