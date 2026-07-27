@@ -105,6 +105,53 @@ app.get('/api/whatsapp/qr', async (req, res) => {
   res.send(`<html><head><meta http-equiv="refresh" content="20"></head><body style="font-family:sans-serif;text-align:center;padding:40px;"><h2>Scan with WhatsApp</h2><p>WhatsApp app &rarr; Settings &rarr; Linked Devices &rarr; Link a Device</p><img src="${qrDataUrl}" style="width:280px;height:280px;" /></body></html>`);
 });
 
+// In-memory store for pending WhatsApp number verification codes (userId -> {code, phone, expiresAt}).
+// Short-lived by design, so it doesn't need to survive a backend restart.
+const pendingWhatsAppVerifications = new Map();
+
+async function getUserFromAuthHeader(req) {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  if (!token || !supabase) return null;
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data?.user) return null;
+  return data.user;
+}
+
+app.post('/api/whatsapp/send-code', async (req, res) => {
+  const user = await getUserFromAuthHeader(req);
+  if (!user) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ success: false, error: 'Phone number is required' });
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  pendingWhatsAppVerifications.set(user.id, { code, phone, expiresAt: Date.now() + 10 * 60 * 1000 });
+
+  const result = await sendWhatsAppMessage(phone, `Your Veonotes verification code is: ${code}`);
+  if (!result.success) {
+    pendingWhatsAppVerifications.delete(user.id);
+    return res.status(502).json({ success: false, error: result.error || 'Could not send WhatsApp message' });
+  }
+  res.json({ success: true });
+});
+
+app.post('/api/whatsapp/verify-code', async (req, res) => {
+  const user = await getUserFromAuthHeader(req);
+  if (!user) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+  const { code } = req.body;
+  const pending = pendingWhatsAppVerifications.get(user.id);
+  if (!pending || pending.expiresAt < Date.now()) {
+    pendingWhatsAppVerifications.delete(user.id);
+    return res.status(400).json({ success: false, error: 'No pending code, or it expired. Request a new one.' });
+  }
+  if (String(code || '').trim() !== pending.code) {
+    return res.status(400).json({ success: false, error: 'Incorrect code' });
+  }
+  pendingWhatsAppVerifications.delete(user.id);
+  res.json({ success: true, phone: pending.phone });
+});
+
 // Helper to send email notifications via Google Apps Script configured in backend/.env
 async function sendEmailNotification(toEmail, channel, isLive, videoUrl, isNewVideo) {
   const gasUrl = process.env.GAS_URL;
@@ -362,7 +409,7 @@ async function checkAllChannels() {
                 console.log(`Email notifications disabled for user ${channel.user_id}. Skipping email.`);
               }
 
-              if (userMetadata.whatsapp_notifications && userMetadata.whatsapp_number) {
+              if (userMetadata.whatsapp_notifications && userMetadata.whatsapp_number && userMetadata.whatsapp_verified) {
                 targetWhatsApp = `${userMetadata.whatsapp_country_code || ''}${userMetadata.whatsapp_number}`;
               }
             }

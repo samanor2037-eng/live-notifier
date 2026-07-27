@@ -454,7 +454,15 @@ function App() {
   const [whatsappNotificationsEnabled, setWhatsappNotificationsEnabled] = useState(false);
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [whatsappCountryCode, setWhatsappCountryCode] = useState('+252');
-  
+  const [whatsappVerified, setWhatsappVerified] = useState(false);
+  const [whatsappVerificationStep, setWhatsappVerificationStep] = useState('idle'); // 'idle' | 'code-sent'
+  const [whatsappVerificationCode, setWhatsappVerificationCode] = useState('');
+  const [isSendingWhatsAppCode, setIsSendingWhatsAppCode] = useState(false);
+  const [isVerifyingWhatsAppCode, setIsVerifyingWhatsAppCode] = useState(false);
+  const [whatsappCountryDropdownOpen, setWhatsappCountryDropdownOpen] = useState(false);
+  const [whatsappCountrySearch, setWhatsappCountrySearch] = useState('');
+  const whatsappCountryDropdownRef = useRef(null);
+
   // Granular Desktop Notification Preferences (YouTube/TikTok Live/Upload combinations)
   const [desktopYtEnabled, setDesktopYtEnabled] = useState(() => localStorage.getItem('veonotes_desktop_yt_enabled') !== 'false');
   const [desktopTtEnabled, setDesktopTtEnabled] = useState(() => localStorage.getItem('veonotes_desktop_tt_enabled') !== 'false');
@@ -1002,6 +1010,8 @@ function App() {
       setWhatsappNotificationsEnabled(userMetadata.whatsapp_notifications === true);
       setWhatsappNumber(userMetadata.whatsapp_number || '');
       setWhatsappCountryCode(userMetadata.whatsapp_country_code || '+252');
+      setWhatsappVerified(userMetadata.whatsapp_verified === true);
+      setWhatsappVerificationStep('idle');
     }
   }, [session]);
 
@@ -1087,15 +1097,64 @@ function App() {
     }
   };
 
-  const handleSaveWhatsAppNumber = async () => {
+  const handleSendWhatsAppCode = async () => {
+    if (!whatsappNumber.trim()) {
+      showToast(language === 'so' ? 'Fadlan geli number-ka WhatsApp' : 'Please enter your WhatsApp number', 'error');
+      return;
+    }
+    setIsSendingWhatsAppCode(true);
     try {
-      const { error } = await supabase.auth.updateUser({
-        data: { whatsapp_country_code: whatsappCountryCode, whatsapp_number: whatsappNumber.trim() }
+      const res = await fetch(`${API_URL}/api/whatsapp/send-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ phone: `${whatsappCountryCode}${whatsappNumber.trim()}` })
       });
-      if (error) throw error;
-      showToast(language === 'so' ? 'Number-ka WhatsApp waa la kaydiyay!' : 'WhatsApp number saved!', 'success');
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to send code');
+      setWhatsappVerificationStep('code-sent');
+      showToast(language === 'so' ? 'Code-ka waa lagu diray WhatsApp-kaaga!' : 'A code was sent to your WhatsApp!', 'success');
     } catch (err) {
       showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
+    } finally {
+      setIsSendingWhatsAppCode(false);
+    }
+  };
+
+  const handleVerifyWhatsAppCode = async () => {
+    if (!whatsappVerificationCode.trim()) return;
+    setIsVerifyingWhatsAppCode(true);
+    try {
+      const res = await fetch(`${API_URL}/api/whatsapp/verify-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ code: whatsappVerificationCode.trim() })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Verification failed');
+
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          whatsapp_country_code: whatsappCountryCode,
+          whatsapp_number: whatsappNumber.trim(),
+          whatsapp_verified: true
+        }
+      });
+      if (error) throw error;
+
+      setWhatsappVerified(true);
+      setWhatsappVerificationStep('idle');
+      setWhatsappVerificationCode('');
+      showToast(language === 'so' ? 'Number-ka WhatsApp waa la xaqiijiyay oo la kaydiyay!' : 'WhatsApp number verified and saved!', 'success');
+    } catch (err) {
+      showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
+    } finally {
+      setIsVerifyingWhatsAppCode(false);
     }
   };
 
@@ -1275,6 +1334,18 @@ function App() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showNotifications]);
+
+  // Close the WhatsApp country dropdown when clicking outside of it
+  useEffect(() => {
+    if (!whatsappCountryDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (whatsappCountryDropdownRef.current && !whatsappCountryDropdownRef.current.contains(e.target)) {
+        setWhatsappCountryDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [whatsappCountryDropdownOpen]);
 
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
@@ -3459,44 +3530,157 @@ function App() {
                     border: '1px dashed var(--card-border)',
                     borderRadius: '12px',
                     display: 'flex',
+                    flexDirection: 'column',
                     gap: '10px',
-                    alignItems: 'flex-end',
-                    flexWrap: 'wrap',
                     animation: 'overlay-fade-in 0.2s ease-out'
                   }}>
-                    <div style={{ minWidth: '160px' }}>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                        {language === 'so' ? 'Dalka' : 'Country'}
-                      </label>
-                      <select
-                        className="input-field"
-                        value={whatsappCountryCode}
-                        onChange={(e) => setWhatsappCountryCode(e.target.value)}
-                        style={{ margin: 0 }}
-                      >
-                        {COUNTRY_CODES.map((c) => (
-                          <option key={`${c.code}-${c.name}`} value={c.code}>
-                            {c.flag} {c.name} ({c.code})
-                          </option>
-                        ))}
-                      </select>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                      <div ref={whatsappCountryDropdownRef} style={{ position: 'relative' }}>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                          {language === 'so' ? 'Dalka' : 'Country'}
+                        </label>
+                        <button
+                          type="button"
+                          className="input-field"
+                          onClick={() => setWhatsappCountryDropdownOpen((o) => !o)}
+                          style={{ margin: 0, width: '64px', fontSize: '1.2rem', cursor: 'pointer', textAlign: 'center' }}
+                          title={COUNTRY_CODES.find((c) => c.code === whatsappCountryCode)?.name}
+                        >
+                          {COUNTRY_CODES.find((c) => c.code === whatsappCountryCode)?.flag || '🏳️'}
+                        </button>
+                        {whatsappCountryDropdownOpen && (
+                          <div style={{
+                            position: 'absolute',
+                            top: 'calc(100% + 6px)',
+                            left: 0,
+                            zIndex: 50,
+                            width: '240px',
+                            maxHeight: '280px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            background: 'var(--surface-solid-2, #1a1a2e)',
+                            border: '1px solid var(--card-border)',
+                            borderRadius: '10px',
+                            boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
+                            overflow: 'hidden'
+                          }}>
+                            <input
+                              type="text"
+                              autoFocus
+                              placeholder={language === 'so' ? 'Raadi dal...' : 'Search country...'}
+                              value={whatsappCountrySearch}
+                              onChange={(e) => setWhatsappCountrySearch(e.target.value)}
+                              style={{
+                                margin: 0,
+                                border: 'none',
+                                borderBottom: '1px solid var(--card-border)',
+                                borderRadius: 0,
+                                padding: '10px 12px',
+                                background: 'transparent',
+                                color: 'var(--text-white)',
+                                fontSize: '0.85rem',
+                                outline: 'none'
+                              }}
+                            />
+                            <div style={{ overflowY: 'auto' }}>
+                              {COUNTRY_CODES
+                                .filter((c) => c.name.toLowerCase().includes(whatsappCountrySearch.toLowerCase()))
+                                .map((c) => (
+                                  <div
+                                    key={`${c.code}-${c.name}`}
+                                    onClick={() => {
+                                      setWhatsappCountryCode(c.code);
+                                      setWhatsappVerified(false);
+                                      setWhatsappCountryDropdownOpen(false);
+                                      setWhatsappCountrySearch('');
+                                    }}
+                                    style={{
+                                      padding: '9px 12px',
+                                      fontSize: '0.85rem',
+                                      color: 'var(--text-white)',
+                                      cursor: 'pointer',
+                                      background: c.code === whatsappCountryCode ? 'rgba(94,23,245,0.15)' : 'transparent'
+                                    }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.background = c.code === whatsappCountryCode ? 'rgba(94,23,245,0.15)' : 'transparent'; }}
+                                  >
+                                    {c.name}
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ flex: 1, minWidth: '180px' }}>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                          {language === 'so' ? 'Number-ka WhatsApp' : 'WhatsApp number'}
+                        </label>
+                        <input
+                          type="tel"
+                          className="input-field"
+                          placeholder="61 xxxxxxx"
+                          value={whatsappNumber}
+                          onChange={(e) => {
+                            setWhatsappNumber(e.target.value);
+                            setWhatsappVerified(false);
+                            setWhatsappVerificationStep('idle');
+                          }}
+                          style={{ margin: 0 }}
+                        />
+                      </div>
+                      {whatsappVerified ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--good, #3a7d3a)', fontSize: '0.85rem', fontWeight: 600, padding: '12px 4px' }}>
+                          <CheckCircle2 size={16} />
+                          {language === 'so' ? 'La xaqiijiyay' : 'Verified'}
+                        </div>
+                      ) : whatsappVerificationStep === 'idle' ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={handleSendWhatsAppCode}
+                          disabled={isSendingWhatsAppCode}
+                          style={{ padding: '12px 20px' }}
+                        >
+                          {isSendingWhatsAppCode ? t('pleaseWait') : (language === 'so' ? 'Dir Code' : 'Send Code')}
+                        </button>
+                      ) : null}
                     </div>
-                    <div style={{ flex: 1, minWidth: '180px' }}>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                        {language === 'so' ? 'Number-ka WhatsApp' : 'WhatsApp number'}
-                      </label>
-                      <input
-                        type="tel"
-                        className="input-field"
-                        placeholder="61 xxxxxxx"
-                        value={whatsappNumber}
-                        onChange={(e) => setWhatsappNumber(e.target.value)}
-                        style={{ margin: 0 }}
-                      />
-                    </div>
-                    <button type="button" className="btn btn-primary" onClick={handleSaveWhatsAppNumber} style={{ padding: '12px 20px' }}>
-                      {language === 'so' ? 'Kaydi' : 'Save'}
-                    </button>
+
+                    {whatsappVerificationStep === 'code-sent' && !whatsappVerified && (
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap', animation: 'overlay-fade-in 0.2s ease-out' }}>
+                        <div style={{ flex: 1, minWidth: '160px' }}>
+                          <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                            {language === 'so' ? 'Geli code-ka lagu diray WhatsApp' : 'Enter the code sent to your WhatsApp'}
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            className="input-field"
+                            placeholder="123456"
+                            value={whatsappVerificationCode}
+                            onChange={(e) => setWhatsappVerificationCode(e.target.value)}
+                            style={{ margin: 0 }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={handleVerifyWhatsAppCode}
+                          disabled={isVerifyingWhatsAppCode}
+                          style={{ padding: '12px 20px' }}
+                        >
+                          {isVerifyingWhatsAppCode ? t('pleaseWait') : (language === 'so' ? 'Xaqiiji' : 'Verify')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSendWhatsAppCode}
+                          disabled={isSendingWhatsAppCode}
+                          style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', cursor: 'pointer', fontSize: '0.8rem', padding: '12px 4px', textDecoration: 'underline' }}
+                        >
+                          {language === 'so' ? 'Dib u dir' : 'Resend'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
