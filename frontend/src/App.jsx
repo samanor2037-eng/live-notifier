@@ -7,7 +7,7 @@ import {
   Eye, EyeOff, ListVideo, GripVertical, Maximize, Minimize,
   Sun, Moon, LogOut, User, ChevronDown, Music2, Volume2, VolumeX,
   FileText, Bold, Italic, Underline, Strikethrough, Subscript,
-  Superscript, Baseline, Highlighter
+  Superscript, Baseline, Highlighter, MessageCircle
 } from 'lucide-react';
 
 // Allowed HTML for rich-text video notes (formatting only, no scripts/links/media)
@@ -288,6 +288,8 @@ function App() {
   const [showSetupGuide, setShowSetupGuide] = useState(false);
   const pollIntervalTime = 5000;
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
+  const [whatsappNotificationsEnabled, setWhatsappNotificationsEnabled] = useState(false);
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   
   // Granular Desktop Notification Preferences (YouTube/TikTok Live/Upload combinations)
   const [desktopYtEnabled, setDesktopYtEnabled] = useState(() => localStorage.getItem('veonotes_desktop_yt_enabled') !== 'false');
@@ -833,6 +835,8 @@ function App() {
       setEmailYtUpload(userMetadata.email_yt_upload !== false);
       setEmailTtLive(userMetadata.email_tt_live !== false);
       setEmailTtUpload(userMetadata.email_tt_upload !== false);
+      setWhatsappNotificationsEnabled(userMetadata.whatsapp_notifications === true);
+      setWhatsappNumber(userMetadata.whatsapp_number || '');
     }
   }, [session]);
 
@@ -895,6 +899,36 @@ function App() {
         data: { [metadataKey]: val }
       });
       if (error) throw error;
+    } catch (err) {
+      showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
+    }
+  };
+
+  const handleToggleWhatsAppNotifications = async (val) => {
+    try {
+      setWhatsappNotificationsEnabled(val);
+      const { error } = await supabase.auth.updateUser({
+        data: { whatsapp_notifications: val }
+      });
+      if (error) throw error;
+      showToast(
+        language === 'so'
+          ? `Ogeysiisyada WhatsApp waa la ${val ? 'shiday' : 'damiyay'}`
+          : `WhatsApp notifications ${val ? 'enabled' : 'disabled'}`,
+        'success'
+      );
+    } catch (err) {
+      showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
+    }
+  };
+
+  const handleSaveWhatsAppNumber = async () => {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { whatsapp_number: whatsappNumber.trim() }
+      });
+      if (error) throw error;
+      showToast(language === 'so' ? 'Number-ka WhatsApp waa la kaydiyay!' : 'WhatsApp number saved!', 'success');
     } catch (err) {
       showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
     }
@@ -3223,6 +3257,64 @@ function App() {
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
+              </div>
+
+              {/* WhatsApp Notifications Row */}
+              <div style={{ borderBottom: '1px solid var(--card-border)', paddingTop: '20px', paddingBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h4 style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-white)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <MessageCircle size={16} color="var(--accent-primary)" />
+                      {language === 'so' ? 'Ogeysiisyada WhatsApp' : 'WhatsApp Notifications'}
+                    </h4>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                      {language === 'so'
+                        ? 'Hel ogeysiis WhatsApp ah marka uu kanalku toos u galo ama muuqaal cusub la soo dhigo.'
+                        : 'Get a WhatsApp message when a channel goes live or uploads a video.'}
+                    </p>
+                  </div>
+                  <div className="switch-container">
+                    <label className="switch-label">
+                      <input
+                        type="checkbox"
+                        checked={whatsappNotificationsEnabled}
+                        onChange={(e) => handleToggleWhatsAppNotifications(e.target.checked)}
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  </div>
+                </div>
+                {whatsappNotificationsEnabled && (
+                  <div style={{
+                    marginTop: '16px',
+                    padding: '16px 20px',
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px dashed var(--card-border)',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    gap: '10px',
+                    alignItems: 'flex-end',
+                    flexWrap: 'wrap',
+                    animation: 'overlay-fade-in 0.2s ease-out'
+                  }}>
+                    <div style={{ flex: 1, minWidth: '220px' }}>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                        {language === 'so' ? 'Number-ka WhatsApp (leh country code)' : 'WhatsApp number (with country code)'}
+                      </label>
+                      <input
+                        type="tel"
+                        className="input-field"
+                        placeholder="+252 61 xxxxxxx"
+                        value={whatsappNumber}
+                        onChange={(e) => setWhatsappNumber(e.target.value)}
+                        style={{ margin: 0 }}
+                      />
+                    </div>
+                    <button type="button" className="btn btn-primary" onClick={handleSaveWhatsAppNumber} style={{ padding: '12px 20px' }}>
+                      {language === 'so' ? 'Kaydi' : 'Save'}
+                    </button>
                   </div>
                 )}
               </div>

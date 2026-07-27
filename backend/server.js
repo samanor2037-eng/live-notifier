@@ -35,6 +35,7 @@ const { createClient } = require('@supabase/supabase-js');
 const fetch = require('node-fetch');
 const xml2js = require('xml2js');
 const nodemailer = require('nodemailer');
+const { initWhatsApp, sendWhatsAppMessage, getStatus: getWhatsAppStatus, getQrImageDataUrl } = require('./whatsapp');
 require('dotenv').config();
 
 const app = express();
@@ -88,6 +89,20 @@ app.get('/api/config', (req, res) => {
     supabaseUrl: process.env.SUPABASE_URL || "",
     supabaseKey: process.env.SUPABASE_ANON_KEY || ""
   });
+});
+
+// One-time pairing page: scan this QR with the WhatsApp account that should
+// send notifications. Auto-refreshes until connected.
+app.get('/api/whatsapp/qr', async (req, res) => {
+  const status = getWhatsAppStatus();
+  if (status.connected) {
+    return res.send('<html><body style="font-family:sans-serif;text-align:center;padding:60px;"><h2>✅ WhatsApp is connected</h2></body></html>');
+  }
+  const qrDataUrl = await getQrImageDataUrl();
+  if (!qrDataUrl) {
+    return res.send('<html><head><meta http-equiv="refresh" content="3"></head><body style="font-family:sans-serif;text-align:center;padding:60px;"><h2>Connecting to WhatsApp...</h2><p>This page will refresh automatically.</p></body></html>');
+  }
+  res.send(`<html><head><meta http-equiv="refresh" content="20"></head><body style="font-family:sans-serif;text-align:center;padding:40px;"><h2>Scan with WhatsApp</h2><p>WhatsApp app &rarr; Settings &rarr; Linked Devices &rarr; Link a Device</p><img src="${qrDataUrl}" style="width:280px;height:280px;" /></body></html>`);
 });
 
 // Helper to send email notifications via Google Apps Script configured in backend/.env
@@ -310,9 +325,10 @@ async function checkAllChannels() {
       const liveStatusChanged = checkResult.isLive && !channel.is_live;
       const newVideoUploaded = checkResult.latestVideoUrl && checkResult.latestVideoUrl !== channel.last_video_url;
 
-      // Trigger email notifications
+      // Trigger email and WhatsApp notifications
       if (liveStatusChanged || newVideoUploaded) {
         let targetEmail = null;
+        let targetWhatsApp = null;
         if (channel.user_id) {
           try {
             const { data: userData } = await supabase.auth.admin.getUserById(channel.user_id);
@@ -345,6 +361,10 @@ async function checkAllChannels() {
               } else {
                 console.log(`Email notifications disabled for user ${channel.user_id}. Skipping email.`);
               }
+
+              if (userMetadata.whatsapp_notifications && userMetadata.whatsapp_number) {
+                targetWhatsApp = userMetadata.whatsapp_number;
+              }
             }
           } catch (err) {
             console.error(`Failed to get email for user ${channel.user_id}:`, err.message);
@@ -353,6 +373,14 @@ async function checkAllChannels() {
 
         if (targetEmail) {
           await sendEmailNotification(targetEmail, channel, checkResult.isLive, checkResult.latestVideoUrl, newVideoUploaded);
+        }
+
+        if (targetWhatsApp) {
+          const platformLabel = channel.platform === 'youtube' ? 'YouTube' : 'TikTok';
+          const message = liveStatusChanged
+            ? `🔴 ${channel.name} is now LIVE on ${platformLabel}!\n${checkResult.latestVideoUrl || ''}`
+            : `🎥 ${channel.name} just uploaded a new video on ${platformLabel}!\n${checkResult.latestVideoUrl || ''}`;
+          await sendWhatsAppMessage(targetWhatsApp, message.trim());
         }
       }
 
@@ -783,6 +811,8 @@ app.get('/api/channel-videos', async (req, res) => {
     }
 
     console.log(`Background polling engine started. Interval: ${intervalMs / 1000} seconds.`);
+
+    initWhatsApp(supabase).catch((err) => console.error('Failed to start WhatsApp connection:', err.message));
 
     // Reschedule after each run finishes (instead of a fixed setInterval) so that
     // if a check ever takes longer than intervalMs, runs never pile up and
