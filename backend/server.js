@@ -36,6 +36,9 @@ const fetch = require('node-fetch');
 const xml2js = require('xml2js');
 const nodemailer = require('nodemailer');
 const { initWhatsApp, sendWhatsAppMessage, getStatus: getWhatsAppStatus, getQrImageDataUrl } = require('./whatsapp');
+const youtubeWebhook = require('./youtube_webhook');
+const { sendTelegramMessage } = require('./telegram');
+const { sendDiscordMessage } = require('./discord');
 require('dotenv').config();
 
 const app = express();
@@ -363,6 +366,120 @@ async function checkAllChannelsGuarded() {
   }
 }
 
+// Applies one scrape result to a single tracked-channel row: figures out
+// whether it's a new live/upload event for that specific row, notifies that
+// row's user if so, and persists the new status. Split out from
+// checkAllChannels so the same scrape result can be applied to every row
+// that tracks the same underlying channel, without re-scraping per row.
+async function processChannelResult(channel, checkResult) {
+  const liveStatusChanged = checkResult.isLive && !channel.is_live;
+  const newVideoUploaded = checkResult.latestVideoUrl && checkResult.latestVideoUrl !== channel.last_video_url;
+
+  // Trigger email and WhatsApp notifications
+  if (liveStatusChanged || newVideoUploaded) {
+    let targetEmail = null;
+    let targetWhatsApp = null;
+    let targetTelegramChatId = null;
+    let targetDiscordWebhook = null;
+    if (channel.user_id) {
+      try {
+        const { data: userData } = await supabase.auth.admin.getUserById(channel.user_id);
+        if (userData && userData.user) {
+          const userMetadata = userData.user.user_metadata || {};
+          const emailEnabled = userMetadata.email_notifications !== false;
+          if (emailEnabled) {
+            // Check granular email preferences
+            const emailYtEnabled = userMetadata.email_yt_enabled !== false;
+            const emailTtEnabled = userMetadata.email_tt_enabled !== false;
+            const emailYtLive = userMetadata.email_yt_live !== false;
+            const emailYtUpload = userMetadata.email_yt_upload !== false;
+            const emailTtLive = userMetadata.email_tt_live !== false;
+            const emailTtUpload = userMetadata.email_tt_upload !== false;
+
+            let shouldSend = false;
+            if (channel.platform === 'youtube' && emailYtEnabled) {
+              if (liveStatusChanged && emailYtLive) shouldSend = true;
+              if (newVideoUploaded && emailYtUpload) shouldSend = true;
+            } else if (channel.platform === 'tiktok' && emailTtEnabled) {
+              if (liveStatusChanged && emailTtLive) shouldSend = true;
+              if (newVideoUploaded && emailTtUpload) shouldSend = true;
+            }
+
+            if (shouldSend) {
+              targetEmail = userData.user.email;
+            } else {
+              console.log(`Email filters did not match for user ${channel.user_id} on ${channel.platform}. Skipping email.`);
+            }
+          } else {
+            console.log(`Email notifications disabled for user ${channel.user_id}. Skipping email.`);
+          }
+
+          if (userMetadata.whatsapp_notifications && userMetadata.whatsapp_number && userMetadata.whatsapp_verified) {
+            targetWhatsApp = `${userMetadata.whatsapp_country_code || ''}${userMetadata.whatsapp_number}`;
+          }
+
+          if (userMetadata.telegram_notifications && userMetadata.telegram_chat_id) {
+            targetTelegramChatId = userMetadata.telegram_chat_id;
+          }
+
+          if (userMetadata.discord_notifications && userMetadata.discord_webhook_url) {
+            targetDiscordWebhook = userMetadata.discord_webhook_url;
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to get email for user ${channel.user_id}:`, err.message);
+      }
+    }
+
+    if (targetEmail) {
+      await sendEmailNotification(targetEmail, channel, checkResult.isLive, checkResult.latestVideoUrl, newVideoUploaded);
+    }
+
+    if (targetWhatsApp || targetTelegramChatId || targetDiscordWebhook) {
+      const platformLabel = channel.platform === 'youtube' ? 'YouTube' : 'TikTok';
+      const message = liveStatusChanged
+        ? `🔴 ${channel.name} is now LIVE on ${platformLabel}!\n${checkResult.latestVideoUrl || ''}`
+        : `🎥 ${channel.name} just uploaded a new video on ${platformLabel}!\n${checkResult.latestVideoUrl || ''}`;
+      const trimmedMessage = message.trim();
+
+      if (targetWhatsApp) {
+        await sendWhatsAppMessage(targetWhatsApp, trimmedMessage);
+      }
+      if (targetTelegramChatId) {
+        await sendTelegramMessage(targetTelegramChatId, trimmedMessage);
+      }
+      if (targetDiscordWebhook) {
+        await sendDiscordMessage(targetDiscordWebhook, trimmedMessage);
+      }
+    }
+  }
+
+  // Update Supabase
+  const updateData = {
+    is_live: checkResult.isLive,
+    last_checked: new Date().toISOString()
+  };
+  if (checkResult.latestVideoUrl) {
+    updateData.last_video_url = checkResult.latestVideoUrl;
+  }
+  if (checkResult.avatar) {
+    updateData.avatar_url = checkResult.avatar;
+  }
+
+  // If YouTube channel is currently live, set last_video_url to its live watch URL
+  // so the player can embed it as a specific video and enable Player API (timestamps, seek).
+  if (channel.platform === 'youtube' && checkResult.isLive && checkResult.liveVideoId) {
+    updateData.last_video_url = `https://www.youtube.com/watch?v=${checkResult.liveVideoId}`;
+  }
+
+  await supabase.from('channels').update(updateData).eq('id', channel.id);
+}
+
+// How many unique channels to scrape in parallel per cycle. Bounded (rather
+// than scraping every unique channel at once) to avoid looking like a burst
+// of bot traffic to YouTube/TikTok from Render's single IP.
+const CHANNEL_SCRAPE_CONCURRENCY = 5;
+
 // Function to poll and update all channels
 async function checkAllChannels() {
   if (!supabase) {
@@ -375,104 +492,47 @@ async function checkAllChannels() {
     const { data: channels, error } = await supabase.from('channels').select('*');
     if (error) throw error;
 
+    // Group tracked-channel rows by the real underlying channel (platform +
+    // identifier) so a channel followed by many users is scraped once per
+    // cycle, not once per follower.
+    const groups = new Map();
     for (const channel of channels) {
-      let checkResult;
-      if (channel.platform === 'youtube') {
-        checkResult = await checkYouTube(channel.identifier);
-      } else if (channel.platform === 'tiktok') {
-        checkResult = await checkTikTok(channel.identifier);
-      }
-
-      // If scraping failed (e.g. rate limit/network error), do not overwrite the live status with false
-      // to prevent false positives/negatives and email notifications flapping.
-      if (!checkResult || !checkResult.success) {
-        console.log(`Scraping unsuccessful for ${channel.name} (${channel.platform}). Skipping update.`);
-        continue;
-      }
-
-      const liveStatusChanged = checkResult.isLive && !channel.is_live;
-      const newVideoUploaded = checkResult.latestVideoUrl && checkResult.latestVideoUrl !== channel.last_video_url;
-
-      // Trigger email and WhatsApp notifications
-      if (liveStatusChanged || newVideoUploaded) {
-        let targetEmail = null;
-        let targetWhatsApp = null;
-        if (channel.user_id) {
-          try {
-            const { data: userData } = await supabase.auth.admin.getUserById(channel.user_id);
-            if (userData && userData.user) {
-              const userMetadata = userData.user.user_metadata || {};
-              const emailEnabled = userMetadata.email_notifications !== false;
-              if (emailEnabled) {
-                // Check granular email preferences
-                const emailYtEnabled = userMetadata.email_yt_enabled !== false;
-                const emailTtEnabled = userMetadata.email_tt_enabled !== false;
-                const emailYtLive = userMetadata.email_yt_live !== false;
-                const emailYtUpload = userMetadata.email_yt_upload !== false;
-                const emailTtLive = userMetadata.email_tt_live !== false;
-                const emailTtUpload = userMetadata.email_tt_upload !== false;
-
-                let shouldSend = false;
-                if (channel.platform === 'youtube' && emailYtEnabled) {
-                  if (liveStatusChanged && emailYtLive) shouldSend = true;
-                  if (newVideoUploaded && emailYtUpload) shouldSend = true;
-                } else if (channel.platform === 'tiktok' && emailTtEnabled) {
-                  if (liveStatusChanged && emailTtLive) shouldSend = true;
-                  if (newVideoUploaded && emailTtUpload) shouldSend = true;
-                }
-
-                if (shouldSend) {
-                  targetEmail = userData.user.email;
-                } else {
-                  console.log(`Email filters did not match for user ${channel.user_id} on ${channel.platform}. Skipping email.`);
-                }
-              } else {
-                console.log(`Email notifications disabled for user ${channel.user_id}. Skipping email.`);
-              }
-
-              if (userMetadata.whatsapp_notifications && userMetadata.whatsapp_number && userMetadata.whatsapp_verified) {
-                targetWhatsApp = `${userMetadata.whatsapp_country_code || ''}${userMetadata.whatsapp_number}`;
-              }
-            }
-          } catch (err) {
-            console.error(`Failed to get email for user ${channel.user_id}:`, err.message);
-          }
-        }
-
-        if (targetEmail) {
-          await sendEmailNotification(targetEmail, channel, checkResult.isLive, checkResult.latestVideoUrl, newVideoUploaded);
-        }
-
-        if (targetWhatsApp) {
-          const platformLabel = channel.platform === 'youtube' ? 'YouTube' : 'TikTok';
-          const message = liveStatusChanged
-            ? `🔴 ${channel.name} is now LIVE on ${platformLabel}!\n${checkResult.latestVideoUrl || ''}`
-            : `🎥 ${channel.name} just uploaded a new video on ${platformLabel}!\n${checkResult.latestVideoUrl || ''}`;
-          await sendWhatsAppMessage(targetWhatsApp, message.trim());
-        }
-      }
-
-      // Update Supabase
-      const updateData = {
-        is_live: checkResult.isLive,
-        last_checked: new Date().toISOString()
-      };
-      if (checkResult.latestVideoUrl) {
-        updateData.last_video_url = checkResult.latestVideoUrl;
-      }
-      if (checkResult.avatar) {
-        updateData.avatar_url = checkResult.avatar;
-      }
-      
-      // If YouTube channel is currently live, set last_video_url to its live watch URL
-      // so the player can embed it as a specific video and enable Player API (timestamps, seek).
-      if (channel.platform === 'youtube' && checkResult.isLive && checkResult.liveVideoId) {
-        updateData.last_video_url = `https://www.youtube.com/watch?v=${checkResult.liveVideoId}`;
-      }
-
-      await supabase.from('channels').update(updateData).eq('id', channel.id);
+      const key = `${channel.platform}:${channel.identifier}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(channel);
     }
-    console.log("All channels successfully checked.");
+    const uniqueEntries = Array.from(groups.values());
+
+    let nextIndex = 0;
+    const worker = async () => {
+      while (nextIndex < uniqueEntries.length) {
+        const rows = uniqueEntries[nextIndex++];
+        const { platform, identifier, name } = rows[0];
+
+        let checkResult;
+        if (platform === 'youtube') {
+          checkResult = await checkYouTube(identifier);
+        } else if (platform === 'tiktok') {
+          checkResult = await checkTikTok(identifier);
+        }
+
+        // If scraping failed (e.g. rate limit/network error), do not overwrite the live status with false
+        // to prevent false positives/negatives and email notifications flapping.
+        if (!checkResult || !checkResult.success) {
+          console.log(`Scraping unsuccessful for ${name} (${platform}). Skipping ${rows.length} tracked row(s).`);
+          continue;
+        }
+
+        for (const channel of rows) {
+          await processChannelResult(channel, checkResult);
+        }
+      }
+    };
+
+    const workerCount = Math.min(CHANNEL_SCRAPE_CONCURRENCY, uniqueEntries.length);
+    await Promise.all(Array.from({ length: workerCount }, worker));
+
+    console.log(`All channels successfully checked (${uniqueEntries.length} unique channel(s), ${channels.length} tracked row(s)).`);
     return { success: true };
   } catch (err) {
     console.error("Error checking channels:", err.message);
@@ -496,6 +556,80 @@ app.post('/api/check', async (req, res) => {
     res.json({ success: true, message: "Manual status check completed successfully." });
   } else {
     res.status(500).json({ success: false, error: result.error || "Check failed" });
+  }
+});
+
+// Same trigger as /api/check, but gated by CRON_SECRET so an external free
+// cron service (e.g. cron-job.org) can be given a URL to ping on a schedule
+// without it doubling as a public "hammer this endpoint" trigger. Left as a
+// separate route rather than locking down /api/check itself, since the
+// frontend already calls /api/check unauthenticated for its own manual
+// refresh button and on-load check.
+app.post('/api/cron/check', async (req, res) => {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    return res.status(503).json({ success: false, error: "CRON_SECRET is not configured on the server." });
+  }
+  const provided = req.get('x-cron-secret') || req.query.secret;
+  if (provided !== cronSecret) {
+    return res.status(401).json({ success: false, error: "Unauthorized" });
+  }
+
+  const result = await checkAllChannelsGuarded();
+  if (result.success) {
+    res.json({ success: true, message: "Cron-triggered status check completed successfully." });
+  } else {
+    res.status(500).json({ success: false, error: result.error || "Check failed" });
+  }
+});
+
+// PubSubHubbub verifies a new/renewed subscription with a GET challenge —
+// echo hub.challenge back as plain text to confirm we own this callback URL.
+app.get('/api/youtube/webhook', (req, res) => {
+  const challenge = req.query['hub.challenge'];
+  if (challenge) {
+    console.log(`YouTube webhook: verified subscription for topic ${req.query['hub.topic']}`);
+    return res.status(200).send(challenge);
+  }
+  res.status(400).send('Missing hub.challenge');
+});
+
+// The hub POSTs the raw Atom feed entry here the moment a tracked channel
+// publishes/updates a video. express.raw() (rather than the global
+// express.json()) is needed both to verify the HMAC signature over the
+// exact bytes received and to hand xml2js the original XML.
+app.post('/api/youtube/webhook', express.raw({ type: '*/*', limit: '1mb' }), async (req, res) => {
+  const rawBody = req.body;
+  const signature = req.get('x-hub-signature');
+
+  if (!youtubeWebhook.verifySignature(rawBody, signature)) {
+    console.warn('YouTube webhook: rejected notification with invalid signature.');
+    return res.status(403).send('Invalid signature');
+  }
+
+  // Acknowledge immediately — the hub only cares about a fast 2xx and will
+  // retry with backoff if we're slow, which we want to avoid.
+  res.status(204).end();
+
+  try {
+    const notifications = await youtubeWebhook.parseNotification(rawBody);
+    for (const { channelId } of notifications) {
+      const { data: rows, error } = await supabase
+        .from('channels')
+        .select('*')
+        .eq('platform', 'youtube')
+        .eq('identifier', channelId);
+      if (error || !rows || rows.length === 0) continue;
+
+      const checkResult = await checkYouTube(channelId);
+      if (!checkResult || !checkResult.success) continue;
+
+      for (const channel of rows) {
+        await processChannelResult(channel, checkResult);
+      }
+    }
+  } catch (err) {
+    console.error('YouTube webhook: failed to process notification:', err.message);
   }
 });
 
@@ -536,6 +670,32 @@ app.post('/api/send-test-email', async (req, res) => {
     }
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/send-test-telegram', async (req, res) => {
+  const { chat_id } = req.body;
+  if (!chat_id) {
+    return res.status(400).json({ error: "Telegram chat ID is required." });
+  }
+  const result = await sendTelegramMessage(chat_id, "✅ Veonotes: this chat is connected. You'll get live/upload alerts here.");
+  if (result.success) {
+    res.json({ success: true, message: "Test Telegram message sent!" });
+  } else {
+    res.status(500).json({ success: false, error: result.error || "Failed to send Telegram message." });
+  }
+});
+
+app.post('/api/send-test-discord', async (req, res) => {
+  const { webhook_url } = req.body;
+  if (!webhook_url) {
+    return res.status(400).json({ error: "Discord webhook URL is required." });
+  }
+  const result = await sendDiscordMessage(webhook_url, "✅ Veonotes: this webhook is connected. You'll get live/upload alerts here.");
+  if (result.success) {
+    res.json({ success: true, message: "Test Discord message sent!" });
+  } else {
+    res.status(500).json({ success: false, error: result.error || "Failed to send Discord message." });
   }
 });
 
@@ -881,6 +1041,19 @@ app.get('/api/channel-videos', async (req, res) => {
     console.log(`Background polling engine started. Interval: ${intervalMs / 1000} seconds.`);
 
     initWhatsApp(supabase).catch((err) => console.error('Failed to start WhatsApp connection:', err.message));
+
+    // Subscribe to real-time YouTube push notifications for every tracked
+    // channel, then renew on a timer well inside the hub's lease so we never
+    // silently fall off and quietly degrade back to poll-only.
+    youtubeWebhook.subscribeAllYoutubeChannels(supabase).catch((err) =>
+      console.error('YouTube webhook subscription failed:', err.message)
+    );
+    const YOUTUBE_RESUBSCRIBE_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+    setInterval(() => {
+      youtubeWebhook.subscribeAllYoutubeChannels(supabase).catch((err) =>
+        console.error('YouTube webhook resubscription failed:', err.message)
+      );
+    }, YOUTUBE_RESUBSCRIBE_INTERVAL_MS);
 
     // Reschedule after each run finishes (instead of a fixed setInterval) so that
     // if a check ever takes longer than intervalMs, runs never pile up and

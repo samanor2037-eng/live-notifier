@@ -8,7 +8,7 @@ import {
   Eye, EyeOff, ListVideo, GripVertical, Maximize, Minimize,
   Sun, Moon, LogOut, User, ChevronDown, Music2, Volume2, VolumeX,
   FileText, Bold, Italic, Underline, Strikethrough, Subscript,
-  Superscript, Baseline, Highlighter, MessageCircle
+  Superscript, Baseline, Highlighter, MessageCircle, Send, MessageSquare
 } from 'lucide-react';
 
 // Allowed HTML for rich-text video notes (formatting only, no scripts/links/media)
@@ -460,6 +460,14 @@ function App() {
   const [whatsappVerificationCode, setWhatsappVerificationCode] = useState('');
   const [isSendingWhatsAppCode, setIsSendingWhatsAppCode] = useState(false);
   const [isVerifyingWhatsAppCode, setIsVerifyingWhatsAppCode] = useState(false);
+  const [telegramNotificationsEnabled, setTelegramNotificationsEnabled] = useState(false);
+  const [telegramChatId, setTelegramChatId] = useState('');
+  const [isSavingTelegram, setIsSavingTelegram] = useState(false);
+  const [isTestingTelegram, setIsTestingTelegram] = useState(false);
+  const [discordNotificationsEnabled, setDiscordNotificationsEnabled] = useState(false);
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
+  const [isSavingDiscord, setIsSavingDiscord] = useState(false);
+  const [isTestingDiscord, setIsTestingDiscord] = useState(false);
   const [whatsappCountryDropdownOpen, setWhatsappCountryDropdownOpen] = useState(false);
   const [whatsappCountrySearch, setWhatsappCountrySearch] = useState('');
   const [whatsappDropdownPos, setWhatsappDropdownPos] = useState({ top: 0, left: 0 });
@@ -1016,6 +1024,10 @@ function App() {
       setWhatsappCountryCode(userMetadata.whatsapp_country_code || '+252');
       setWhatsappVerified(userMetadata.whatsapp_verified === true);
       setWhatsappVerificationStep('idle');
+      setTelegramNotificationsEnabled(userMetadata.telegram_notifications === true);
+      setTelegramChatId(userMetadata.telegram_chat_id || '');
+      setDiscordNotificationsEnabled(userMetadata.discord_notifications === true);
+      setDiscordWebhookUrl(userMetadata.discord_webhook_url || '');
     }
   }, [session]);
 
@@ -1159,6 +1171,98 @@ function App() {
       showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
     } finally {
       setIsVerifyingWhatsAppCode(false);
+    }
+  };
+
+  const handleToggleTelegramNotifications = async (val) => {
+    try {
+      setTelegramNotificationsEnabled(val);
+      const { error } = await supabase.auth.updateUser({ data: { telegram_notifications: val } });
+      if (error) throw error;
+    } catch (err) {
+      showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
+    }
+  };
+
+  const handleSaveTelegramChatId = async () => {
+    if (!telegramChatId.trim()) {
+      showToast(language === 'so' ? 'Fadlan geli Telegram Chat ID-ga' : 'Please enter your Telegram Chat ID', 'error');
+      return;
+    }
+    setIsSavingTelegram(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ data: { telegram_chat_id: telegramChatId.trim() } });
+      if (error) throw error;
+      showToast(language === 'so' ? 'Telegram Chat ID waa la kaydiyay!' : 'Telegram Chat ID saved!', 'success');
+    } catch (err) {
+      showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
+    } finally {
+      setIsSavingTelegram(false);
+    }
+  };
+
+  const handleTestTelegram = async () => {
+    if (!telegramChatId.trim()) return;
+    setIsTestingTelegram(true);
+    try {
+      const res = await fetch(`${API_URL}/api/send-test-telegram`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: telegramChatId.trim() })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to send test message');
+      showToast(language === 'so' ? 'Fariin tijaabo ah ayaa loo diray Telegram!' : 'Test message sent to Telegram!', 'success');
+    } catch (err) {
+      showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
+    } finally {
+      setIsTestingTelegram(false);
+    }
+  };
+
+  const handleToggleDiscordNotifications = async (val) => {
+    try {
+      setDiscordNotificationsEnabled(val);
+      const { error } = await supabase.auth.updateUser({ data: { discord_notifications: val } });
+      if (error) throw error;
+    } catch (err) {
+      showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
+    }
+  };
+
+  const handleSaveDiscordWebhook = async () => {
+    if (!discordWebhookUrl.trim()) {
+      showToast(language === 'so' ? 'Fadlan geli Discord Webhook URL-ka' : 'Please enter your Discord Webhook URL', 'error');
+      return;
+    }
+    setIsSavingDiscord(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ data: { discord_webhook_url: discordWebhookUrl.trim() } });
+      if (error) throw error;
+      showToast(language === 'so' ? 'Discord Webhook waa la kaydiyay!' : 'Discord Webhook saved!', 'success');
+    } catch (err) {
+      showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
+    } finally {
+      setIsSavingDiscord(false);
+    }
+  };
+
+  const handleTestDiscord = async () => {
+    if (!discordWebhookUrl.trim()) return;
+    setIsTestingDiscord(true);
+    try {
+      const res = await fetch(`${API_URL}/api/send-test-discord`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhook_url: discordWebhookUrl.trim() })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to send test message');
+      showToast(language === 'so' ? 'Fariin tijaabo ah ayaa loo diray Discord!' : 'Test message sent to Discord!', 'success');
+    } catch (err) {
+      showToast(`${t('toastErrorPrefix')}: ${err.message}`, 'error');
+    } finally {
+      setIsTestingDiscord(false);
     }
   };
 
@@ -3699,6 +3803,162 @@ function App() {
                         </button>
                       </div>
                     )}
+                  </div>
+                )}
+              </div>
+
+              {/* Telegram Notifications Row */}
+              <div style={{ borderBottom: '1px solid var(--card-border)', paddingTop: '20px', paddingBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h4 style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-white)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Send size={16} color="var(--accent-primary)" />
+                      {language === 'so' ? 'Ogeysiisyada Telegram' : 'Telegram Notifications'}
+                    </h4>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                      {language === 'so'
+                        ? 'Bilaash oo aan xad lahayn. Hadal bot-kaaga oo geli Chat ID-ga hoos.'
+                        : 'Free and unlimited. Message your bot, then paste your Chat ID below.'}
+                    </p>
+                  </div>
+                  <div className="switch-container">
+                    <label className="switch-label">
+                      <input
+                        type="checkbox"
+                        checked={telegramNotificationsEnabled}
+                        onChange={(e) => handleToggleTelegramNotifications(e.target.checked)}
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  </div>
+                </div>
+                {telegramNotificationsEnabled && (
+                  <div style={{
+                    marginTop: '16px',
+                    padding: '16px 20px',
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px dashed var(--card-border)',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    animation: 'overlay-fade-in 0.2s ease-out'
+                  }}>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                      {language === 'so'
+                        ? '1) Ka bilow hadal Telegram bot-ka. 2) Ka hel Chat ID-gaaga @userinfobot. 3) Ku dheji hoos.'
+                        : '1) Start a chat with the app\'s Telegram bot. 2) Get your Chat ID from @userinfobot. 3) Paste it below.'}
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: '180px' }}>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                          Chat ID
+                        </label>
+                        <input
+                          type="text"
+                          className="input-field"
+                          placeholder="123456789"
+                          value={telegramChatId}
+                          onChange={(e) => setTelegramChatId(e.target.value)}
+                          style={{ margin: 0 }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={handleSaveTelegramChatId}
+                        disabled={isSavingTelegram}
+                        style={{ padding: '12px 20px' }}
+                      >
+                        {isSavingTelegram ? t('pleaseWait') : (language === 'so' ? 'Kaydi' : 'Save')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleTestTelegram}
+                        disabled={isTestingTelegram || !telegramChatId.trim()}
+                        style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', cursor: 'pointer', fontSize: '0.8rem', padding: '12px 4px', textDecoration: 'underline' }}
+                      >
+                        {isTestingTelegram ? t('pleaseWait') : (language === 'so' ? 'Tijaabi' : 'Test')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Discord Notifications Row */}
+              <div style={{ borderBottom: '1px solid var(--card-border)', paddingTop: '20px', paddingBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h4 style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-white)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <MessageSquare size={16} color="var(--accent-primary)" />
+                      {language === 'so' ? 'Ogeysiisyada Discord' : 'Discord Notifications'}
+                    </h4>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                      {language === 'so'
+                        ? 'Bilaash oo aan xad lahayn. Samee Discord Webhook oo ku dheji URL-ka hoos.'
+                        : 'Free and unlimited. Create a Discord Webhook and paste its URL below.'}
+                    </p>
+                  </div>
+                  <div className="switch-container">
+                    <label className="switch-label">
+                      <input
+                        type="checkbox"
+                        checked={discordNotificationsEnabled}
+                        onChange={(e) => handleToggleDiscordNotifications(e.target.checked)}
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  </div>
+                </div>
+                {discordNotificationsEnabled && (
+                  <div style={{
+                    marginTop: '16px',
+                    padding: '16px 20px',
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px dashed var(--card-border)',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    animation: 'overlay-fade-in 0.2s ease-out'
+                  }}>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                      {language === 'so'
+                        ? 'Server Settings → Integrations → Webhooks → New Webhook, kadibna nuqul URL-ka.'
+                        : 'Server Settings → Integrations → Webhooks → New Webhook, then copy the URL.'}
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: '180px' }}>
+                        <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                          Webhook URL
+                        </label>
+                        <input
+                          type="text"
+                          className="input-field"
+                          placeholder="https://discord.com/api/webhooks/..."
+                          value={discordWebhookUrl}
+                          onChange={(e) => setDiscordWebhookUrl(e.target.value)}
+                          style={{ margin: 0 }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={handleSaveDiscordWebhook}
+                        disabled={isSavingDiscord}
+                        style={{ padding: '12px 20px' }}
+                      >
+                        {isSavingDiscord ? t('pleaseWait') : (language === 'so' ? 'Kaydi' : 'Save')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleTestDiscord}
+                        disabled={isTestingDiscord || !discordWebhookUrl.trim()}
+                        style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', cursor: 'pointer', fontSize: '0.8rem', padding: '12px 4px', textDecoration: 'underline' }}
+                      >
+                        {isTestingDiscord ? t('pleaseWait') : (language === 'so' ? 'Tijaabi' : 'Test')}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
